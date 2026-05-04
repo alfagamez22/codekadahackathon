@@ -13,6 +13,7 @@ interface StationMapProps {
 export function StationMap({ stations, userLat, userLng, onStationSelect }: StationMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [mapReady, setMapReady] = useState(false)
+  const [hasMapData, setHasMapData] = useState(true)
   const mapInstanceRef = useRef<unknown>(null)
 
   useEffect(() => {
@@ -22,8 +23,16 @@ export function StationMap({ stations, userLat, userLng, onStationSelect }: Stat
       const L = (await import('leaflet')).default
       await import('leaflet/dist/leaflet.css')
 
-      const centerLat = userLat ?? stations[0]?.latitude ?? 14.5995
-      const centerLng = userLng ?? stations[0]?.longitude ?? 120.9842
+      const hasUserLocation = userLat != null && userLng != null
+      const firstStation = stations[0]
+      if (!hasUserLocation && !firstStation) {
+        setHasMapData(false)
+        setMapReady(true)
+        return
+      }
+
+      const centerLat = hasUserLocation ? userLat : firstStation!.latitude
+      const centerLng = hasUserLocation ? userLng : firstStation!.longitude
 
       const map = L.map(mapRef.current!, { zoomControl: true }).setView([centerLat, centerLng], 13)
 
@@ -31,8 +40,8 @@ export function StationMap({ stations, userLat, userLng, onStationSelect }: Stat
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map)
 
-      if (userLat && userLng) {
-        L.circleMarker([userLat, userLng], {
+      if (hasUserLocation) {
+        L.circleMarker([userLat!, userLng!], {
           radius: 8,
           color: '#16a34a',
           fillColor: '#16a34a',
@@ -70,6 +79,11 @@ export function StationMap({ stations, userLat, userLng, onStationSelect }: Stat
       {!mapReady && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-muted text-sm">
           Loading map...
+        </div>
+      )}
+      {mapReady && !hasMapData && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-muted text-sm">
+          No stations to display.
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/auth/guards'
-import { getSystemStats } from '@/lib/db/queries/analytics'
-import { getTopContributors } from '@/lib/db/queries/analytics'
+import { getSystemStats } from '@/lib/db/queries/analytics-dev'
+import { getTopContributors } from '@/lib/db/queries/analytics-dev'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/layout/page-header'
 import Link from 'next/link'
