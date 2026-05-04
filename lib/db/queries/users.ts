@@ -1,5 +1,6 @@
 import 'server-only'
 import sql from '../index'
+import { mirrorUserToFirestore } from '@/lib/firebase-admin/sql-mirror'
 import type { UserProfile } from '@/types/auth'
 import type { UserRole } from '@/types/auth'
 
@@ -38,10 +39,20 @@ export async function upsertUser(data: {
       photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url),
       updated_at = now()
   `
+
+  const user = await getUser(data.id)
+  if (user) {
+    await mirrorUserToFirestore(user)
+  }
 }
 
 export async function updateUserRole(id: string, role: UserRole): Promise<void> {
   await sql`UPDATE users SET role = ${role}, updated_at = now() WHERE id = ${id}`
+
+  const user = await getUser(id)
+  if (user) {
+    await mirrorUserToFirestore(user)
+  }
 }
 
 export async function incrementUserReportCount(id: string, confirmed = false): Promise<void> {
@@ -59,6 +70,11 @@ export async function incrementUserReportCount(id: string, confirmed = false): P
       UPDATE users SET report_count = report_count + 1, updated_at = now()
       WHERE id = ${id}
     `
+  }
+
+  const user = await getUser(id)
+  if (user) {
+    await mirrorUserToFirestore(user)
   }
 }
 

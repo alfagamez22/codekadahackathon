@@ -1,4 +1,4 @@
-export type UserRole = 'user' | 'moderator' | 'admin'
+export type UserRole = 'user' | 'moderator' | 'admin' | 'superadmin'
 
 export interface SessionUser {
   uid: string

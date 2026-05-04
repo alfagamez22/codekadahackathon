@@ -1,0 +1,1 @@
+{"version":3,"file":"firestore-admin.js","sourceRoot":"","sources":["../../src/utils/firestore-admin.ts"],"names":[],"mappings":";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;AAAA,sDAAuC;AAO9B,sBAAK;AALd,IAAI,CAAC,KAAK,CAAC,IAAI,CAAC,MAAM,EAAE,CAAC;IACvB,KAAK,CAAC,aAAa,EAAE,CAAA;AACvB,CAAC;AAEY,QAAA,EAAE,GAAG,KAAK,CAAC,SAAS,EAAE,CAAA"}

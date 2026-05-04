@@ -17,7 +17,7 @@ export function FlaggedReportReview() {
 
   useEffect(() => {
     const q = query(
-      collection(getFirebaseDb(), 'price_reports'),
+      collection(getFirebaseDb(), 'priceReports'),
       where('status', '==', 'flagged')
     )
     return onSnapshot(q, (snap) => {

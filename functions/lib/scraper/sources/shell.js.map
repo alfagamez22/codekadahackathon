@@ -1,0 +1,1 @@
+{"version":3,"file":"shell.js","sourceRoot":"","sources":["../../../src/scraper/sources/shell.ts"],"names":[],"mappings":";;AAEA,kCAQC;AARM,KAAK,UAAU,WAAW;IAC/B,OAAO,CAAC,GAAG,CAAC,gDAAgD,CAAC,CAAA;IAC7D,OAAO;QACL,UAAU,EAAE,OAAO;QACnB,SAAS,EAAE,iCAAiC;QAC5C,MAAM,EAAE,EAAE;QACV,SAAS,EAAE,IAAI,IAAI,EAAE,CAAC,WAAW,EAAE;KACpC,CAAA;AACH,CAAC"}

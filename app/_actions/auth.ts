@@ -9,5 +9,5 @@ export async function signOutAction() {
   const session = await readSession()
   if (session) await revokeRefreshTokens(session.uid)
   await clearSessionCookie()
-  redirect('/login')
+  redirect(session?.role === 'superadmin' ? '/superadmin' : '/login')
 }

@@ -39,18 +39,18 @@ export function UserManagementTable({ users }: UserManagementTableProps) {
               <td className="py-3 font-medium">{user.displayName ?? '—'}</td>
               <td className="py-3 text-muted">{user.email ?? '—'}</td>
               <td className="py-3">
-                <Badge variant={user.role === 'admin' ? 'admin' : user.role === 'moderator' ? 'moderator' : 'user'} label={user.role} />
+                <Badge variant={user.role === 'superadmin' ? 'superadmin' : user.role === 'admin' ? 'admin' : user.role === 'moderator' ? 'moderator' : 'user'} label={user.role} />
               </td>
               <td className="py-3 text-right">{user.confirmedReportCount}/{user.reportCount}</td>
               <td className="py-3 text-right">{user.trustScore}</td>
               <td className="py-3 text-right">
                 <div className="flex gap-1 justify-end">
-                  {user.role !== 'moderator' && (
+                  {user.role !== 'superadmin' && user.role !== 'moderator' && (
                     <Button size="sm" variant="secondary" onClick={() => handleRoleChange(user.uid, 'moderator')} loading={pending === user.uid}>
                       Make Mod
                     </Button>
                   )}
-                  {user.role !== 'user' && (
+                  {user.role !== 'superadmin' && user.role !== 'user' && (
                     <Button size="sm" variant="ghost" onClick={() => handleRoleChange(user.uid, 'user')} loading={pending === user.uid}>
                       Revoke
                     </Button>

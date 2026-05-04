@@ -2,6 +2,22 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /systemConfig/{documentId} {
+      allow read: if signedIn();
+    }
+
+    match /priceReports/{reportId} {
+      allow read: if signedIn();
+
+      match /votes/{voteId} {
+        allow read: if signedIn();
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

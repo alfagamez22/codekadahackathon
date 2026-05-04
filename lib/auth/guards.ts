@@ -11,7 +11,14 @@ export async function requireAuth(): Promise<SessionUser> {
 
 export async function requireRole(allowedRoles: UserRole[]): Promise<SessionUser> {
   const session = await requireAuth()
+  if (session.role === 'superadmin') return session
   if (!allowedRoles.includes(session.role)) redirect('/dashboard')
+  return session
+}
+
+export async function requireSuperadmin(): Promise<SessionUser> {
+  const session = await requireAuth()
+  if (session.role !== 'superadmin') redirect('/dashboard')
   return session
 }
 

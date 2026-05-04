@@ -1,5 +1,11 @@
 import 'server-only'
 import sql from '../index'
+import {
+  deleteFuelPricesByStationFromFirestore,
+  deletePriceHistoryByStationFromFirestore,
+  deleteStationFromFirestore,
+  mirrorStationToFirestore,
+} from '@/lib/firebase-admin/sql-mirror'
 import type { Station, StationListItem, FuelType } from '@/types/station'
 
 export async function getStation(id: string): Promise<Station | null> {
@@ -123,7 +129,12 @@ export async function createStation(data: {
     )
     RETURNING id::text
   `
-  return rows[0].id
+  const id = rows[0].id
+  const station = await getStation(id)
+  if (station) {
+    await mirrorStationToFirestore(station)
+  }
+  return id
 }
 
 export async function updateStation(
@@ -155,8 +166,18 @@ export async function updateStation(
       updated_at = now()
     WHERE id = ${id}::uuid
   `
+
+  const station = await getStation(id)
+  if (station) {
+    await mirrorStationToFirestore(station)
+  }
 }
 
 export async function deleteStation(id: string): Promise<void> {
   await sql`DELETE FROM stations WHERE id = ${id}::uuid`
+  await Promise.all([
+    deleteStationFromFirestore(id),
+    deleteFuelPricesByStationFromFirestore(id),
+    deletePriceHistoryByStationFromFirestore(id),
+  ])
 }
