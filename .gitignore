@@ -41,6 +41,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+Feature3.md
 .vercel
 
 Feature3.md
