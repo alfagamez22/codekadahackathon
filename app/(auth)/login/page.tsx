@@ -9,6 +9,10 @@ export const metadata: Metadata = { title: 'Sign in' }
 export default function LoginPage() {
   return (
     <Card padding="lg">
+      <h1 className="text-xl font-bold text-foreground mb-1">Continue with Google</h1>
+      <p className="text-sm text-muted mb-6">
+        Sign in with Google to access the app. First-time sign-in automatically creates your account.
+      </p>
       <h1 className="text-xl font-bold text-foreground mb-1">Welcome back</h1>
       <p className="text-sm text-muted mb-6">Sign in to track and report fuel prices.</p>
       <LoginFormDev />
@@ -21,6 +25,7 @@ export default function LoginPage() {
         No account?{' '}
         <Link href="/auth/register" className="text-fuel-green hover:underline font-medium">Create one</Link>
       </p>
+      <GoogleSignInButton label="Continue with Google" />
     </Card>
   )
 }

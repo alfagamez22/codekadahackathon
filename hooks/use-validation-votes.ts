@@ -10,7 +10,7 @@ export function useValidationVotes(reportId: string) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const votesRef = collection(getFirebaseDb(), 'price_reports', reportId, 'votes')
+    const votesRef = collection(getFirebaseDb(), 'priceReports', reportId, 'votes')
     const unsub = onSnapshot(votesRef, (snap) => {
       setVotes(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ValidationVote)))
       setLoading(false)
@@ -26,7 +26,7 @@ export function usePendingReports() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const reportsRef = collection(getFirebaseDb(), 'price_reports')
+    const reportsRef = collection(getFirebaseDb(), 'priceReports')
     const q = query(reportsRef, where('status', '==', 'pending'))
     const unsub: Unsubscribe = onSnapshot(q, (snap) => {
       setReports(snap.docs.map((d) => ({ id: d.id, ...d.data() } as PriceReport)))

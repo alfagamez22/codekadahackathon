@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { readSession } from '@/lib/auth/session'
-import { signOutAction } from '@/app/_actions/auth'
+import { SignOutButton } from '@/components/auth/sign-out-button'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { UserRole } from '@/types/auth'
@@ -25,9 +25,9 @@ export async function Header() {
               <Link href="/stations/nearby" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Nearby</Link>
               <Link href="/route-planner" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Route</Link>
               <Link href="/validate" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Validate</Link>
-              {(session.role === 'admin' || session.role === 'moderator') && (
-                <Link href={session.role === 'admin' ? '/admin' : '/moderator'} className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">
-                  {session.role === 'admin' ? 'Admin' : 'Review'}
+              {(session.role === 'superadmin' || session.role === 'admin' || session.role === 'moderator') && (
+                <Link href={session.role === 'superadmin' ? '/superadmin' : session.role === 'admin' ? '/admin' : '/moderator'} className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">
+                  {session.role === 'superadmin' ? 'Superadmin' : session.role === 'admin' ? 'Admin' : 'Review'}
                 </Link>
               )}
             </nav>
@@ -37,17 +37,12 @@ export async function Header() {
             {session ? (
               <>
                 <Badge variant={session.role as UserRole} />
-                <form action={signOutAction}>
-                  <Button type="submit" variant="ghost" size="sm">Sign out</Button>
-                </form>
+                <SignOutButton redirectTo={session.role === 'superadmin' ? '/superadmin' : '/login'} />
               </>
             ) : (
               <>
-                <Link href="/auth/login">
-                  <Button variant="ghost" size="sm">Sign in</Button>
-                </Link>
-                <Link href="/auth/register">
-                  <Button size="sm">Get started</Button>
+                <Link href="/login">
+                  <Button size="sm">Continue with Google</Button>
                 </Link>
               </>
             )}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signUpWithEmail, getIdToken } from '@/lib/firebase/auth'
+import { signUpWithEmail, syncServerSession } from '@/lib/firebase/auth'
 import { signUpSchema } from '@/lib/utils/validators'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -34,11 +34,11 @@ export function RegisterForm() {
     setErrors({})
     setLoading(true)
     try {
-      await signUpWithEmail(data.email, data.password, data.displayName)
-      const token = await getIdToken()
-      if (token) await fetch('/api/auth/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: token }) })
+      const user = await signUpWithEmail(data.email, data.password, data.displayName)
+      await syncServerSession(user)
       showToast('Account created successfully!', 'success')
-      router.push('/dashboard')
+      router.replace('/dashboard')
+      router.refresh()
     } catch (err: unknown) {
       const code = (err as { code?: string }).code
       if (code === 'auth/email-already-in-use') showToast('Email already registered', 'error')

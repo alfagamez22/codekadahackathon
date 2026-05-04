@@ -1,6 +1,7 @@
 import 'server-only'
 import { getAuth } from 'firebase-admin/auth'
 import getAdminApp from './index'
+import { resolveUserRole } from '@/lib/auth/superadmin'
 import type { SessionUser, UserRole } from '@/types/auth'
 
 function getAdminAuth() {
@@ -39,7 +40,7 @@ export async function getSessionUser(sessionCookie: string): Promise<SessionUser
       email: decoded.email ?? null,
       displayName: decoded.name ?? null,
       photoURL: decoded.picture ?? null,
-      role: (decoded.role as UserRole) ?? 'user',
+      role: resolveUserRole(decoded.email, decoded.role as string | undefined),
     }
   } catch {
     return null

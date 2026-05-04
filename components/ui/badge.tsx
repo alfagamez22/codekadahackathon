@@ -1,7 +1,7 @@
 import type { PriceBadge } from '@/types/station'
 
 const badgeConfig: Record<
-  PriceBadge | 'moderator' | 'admin' | 'user' | 'pending' | 'confirmed' | 'rejected' | 'flagged' | 'expired',
+  PriceBadge | 'superadmin' | 'moderator' | 'admin' | 'user' | 'pending' | 'confirmed' | 'rejected' | 'flagged' | 'expired',
   { label: string; className: string }
 > = {
   'admin-verified': {
@@ -27,6 +27,10 @@ const badgeConfig: Record<
   moderator: {
     label: 'Moderator',
     className: 'bg-purple-100 text-purple-800 border border-purple-200',
+  },
+  superadmin: {
+    label: 'Superadmin',
+    className: 'bg-slate-900 text-white border border-slate-700',
   },
   admin: {
     label: 'Admin',

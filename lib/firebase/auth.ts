@@ -10,6 +10,22 @@ import {
 import { getFirebaseAuth } from './client'
 
 const googleProvider = new GoogleAuthProvider()
+googleProvider.setCustomParameters({ prompt: 'select_account' })
+
+export async function syncServerSession(user: User): Promise<void> {
+  const idToken = await user.getIdToken()
+  const response = await fetch('/api/auth/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ idToken }),
+  })
+
+  if (response.ok) return
+
+  const payload = (await response.json().catch(() => null)) as { error?: string } | null
+  throw new Error(payload?.error ?? 'Failed to create server session')
+}
 
 export async function signInWithEmail(email: string, password: string): Promise<User> {
   const auth = getFirebaseAuth()

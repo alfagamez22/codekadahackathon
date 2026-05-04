@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 
 export default async function AuthLayout({ children }: { children: ReactNode }) {
   const session = await readSession()
-  if (session) redirect('/dashboard')
+  if (session) redirect(session.role === 'superadmin' ? '/superadmin' : '/dashboard')
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">

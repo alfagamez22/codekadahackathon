@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyIdToken } from '@/lib/firebase-admin/auth'
+import { setUserRole, verifyIdToken } from '@/lib/firebase-admin/auth'
+import { resolveUserRole } from '@/lib/auth/superadmin'
 import { setSessionCookie } from '@/lib/auth/session'
 import { upsertUser } from '@/lib/db/queries/users'
 
@@ -13,6 +14,12 @@ export async function POST(request: NextRequest) {
     }
 
     const decoded = await verifyIdToken(idToken)
+    const role = resolveUserRole(decoded.email, decoded.role as string | undefined)
+
+    if (role === 'superadmin' && decoded.role !== 'superadmin') {
+      await setUserRole(decoded.uid, 'superadmin')
+    }
+
     await setSessionCookie(idToken)
 
     // Mirror user to PostgreSQL on first auth
@@ -21,7 +28,7 @@ export async function POST(request: NextRequest) {
       displayName: decoded.name ?? null,
       email: decoded.email ?? null,
       photoURL: decoded.picture ?? null,
-      role: (decoded.role as 'user' | 'moderator' | 'admin') ?? 'user',
+      role: role === 'superadmin' ? 'admin' : role,
     })
 
     return NextResponse.json({ success: true })

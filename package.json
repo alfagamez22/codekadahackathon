@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "firebase:seed": "node scripts/seed-firestore.mjs",
+    "firebase:bootstrap": "firebase deploy --only firestore && npm run firebase:seed",
+    "firebase:sync-sql": "node scripts/sync-sql-to-firestore.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.9",

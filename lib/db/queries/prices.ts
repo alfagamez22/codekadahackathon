@@ -1,5 +1,6 @@
 import 'server-only'
 import sql from '../index'
+import { mirrorFuelPriceToFirestore, mirrorPriceHistoryToFirestore } from '@/lib/firebase-admin/sql-mirror'
 import type { FuelPrice, PriceHistory, PriceSnapshot } from '@/types/price'
 import type { FuelType, PriceSourceType } from '@/types/station'
 
@@ -92,6 +93,44 @@ export async function upsertConfirmedPrice(data: {
       ${data.confirmedReportId ?? null}
     )
   `
+
+  const currentPriceRows = await sql<FuelPrice[]>`
+    SELECT
+      id::text,
+      station_id::text AS "stationId",
+      fuel_type AS "fuelType",
+      current_price::float AS "currentPrice",
+      source_type AS "sourceType",
+      confirmed_report_id AS "confirmedReportId",
+      confirmation_count AS "confirmationCount",
+      updated_at AS "updatedAt"
+    FROM fuel_prices
+    WHERE station_id = ${data.stationId}::uuid AND fuel_type = ${data.fuelType}
+  `
+
+  const latestHistoryRows = await sql<PriceHistory[]>`
+    SELECT
+      id::text,
+      station_id::text AS "stationId",
+      fuel_type AS "fuelType",
+      old_price::float AS "oldPrice",
+      new_price::float AS "newPrice",
+      source_type AS "sourceType",
+      report_id AS "reportId",
+      changed_at AS "changedAt"
+    FROM price_history
+    WHERE station_id = ${data.stationId}::uuid AND fuel_type = ${data.fuelType}
+    ORDER BY changed_at DESC, id DESC
+    LIMIT 1
+  `
+
+  if (currentPriceRows[0]) {
+    await mirrorFuelPriceToFirestore(currentPriceRows[0])
+  }
+
+  if (latestHistoryRows[0]) {
+    await mirrorPriceHistoryToFirestore(latestHistoryRows[0])
+  }
 }
 
 export async function getBaselinePrices(params: {
