@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { onAuthStateChanged, type User } from 'firebase/auth'
 import { getFirebaseAuth } from '@/lib/firebase/client'
-import { getIdToken } from '@/lib/firebase/auth'
+import { syncServerSession } from '@/lib/firebase/auth'
 
 interface AuthContextValue {
   user: User | null
@@ -22,14 +22,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
 
       if (firebaseUser) {
-        // Sync session cookie with server on auth state change
-        const idToken = await getIdToken()
-        if (idToken) {
-          await fetch('/api/auth/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken }),
-          })
+        try {
+          await syncServerSession(firebaseUser)
+        } catch (error) {
+          console.error('Session sync failed:', error)
         }
       }
     })

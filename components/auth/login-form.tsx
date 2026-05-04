@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithEmail, getIdToken } from '@/lib/firebase/auth'
+import { signInWithEmail, syncServerSession } from '@/lib/firebase/auth'
 import { signInSchema } from '@/lib/utils/validators'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -30,10 +30,10 @@ export function LoginForm() {
     setErrors({})
     setLoading(true)
     try {
-      await signInWithEmail(data.email, data.password)
-      const token = await getIdToken()
-      if (token) await fetch('/api/auth/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: token }) })
-      router.push('/dashboard')
+      const user = await signInWithEmail(data.email, data.password)
+      await syncServerSession(user)
+      router.replace('/dashboard')
+      router.refresh()
     } catch {
       showToast('Invalid email or password', 'error')
     } finally {

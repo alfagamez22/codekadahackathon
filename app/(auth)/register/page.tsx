@@ -19,7 +19,7 @@ export default function RegisterPage() {
       <GoogleSignInButton />
       <p className="mt-4 text-center text-sm text-muted">
         Already have an account?{' '}
-        <Link href="/auth/login" className="text-fuel-green hover:underline font-medium">Sign in</Link>
+        <Link href="/login" className="text-fuel-green hover:underline font-medium">Sign in</Link>
       </p>
     </Card>
   )

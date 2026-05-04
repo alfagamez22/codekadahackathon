@@ -25,10 +25,10 @@ export default function LandingPage() {
             across the Philippines — live, accurate, and verified by real people.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/auth/register">
+            <Link href="/register">
               <Button size="lg">Get Started Free</Button>
             </Link>
-            <Link href="/auth/login">
+            <Link href="/login">
               <Button size="lg" variant="secondary">Sign in</Button>
             </Link>
           </div>
@@ -72,7 +72,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-xl">
           <h2 className="text-2xl font-bold mb-3">Ready to save on fuel?</h2>
           <p className="mb-6 opacity-90">Join thousands of Filipinos who track fuel prices together.</p>
-          <Link href="/auth/register">
+          <Link href="/register">
             <Button variant="secondary" size="lg">Create Free Account</Button>
           </Link>
         </div>
