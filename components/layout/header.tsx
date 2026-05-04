@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { readSession } from '@/lib/auth/session'
-import { signOutAction } from '@/app/_actions/auth'
+import { SignOutButton } from '@/components/auth/sign-out-button'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { UserRole } from '@/types/auth'
@@ -36,9 +36,7 @@ export async function Header() {
             {session ? (
               <>
                 <Badge variant={session.role as UserRole} />
-                <form action={signOutAction}>
-                  <Button type="submit" variant="ghost" size="sm">Sign out</Button>
-                </form>
+                <SignOutButton redirectTo={session.role === 'superadmin' ? '/superadmin' : '/login'} />
               </>
             ) : (
               <>
