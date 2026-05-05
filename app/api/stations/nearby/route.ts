@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getNearbyStations } from '@/lib/db/queries/stations'
+import { getNearbyStations } from '@/lib/firebase-admin/queries/stations'
 import { parseCoordinates } from '@/lib/utils/geo'
 import type { FuelType } from '@/types/station'
 

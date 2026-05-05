@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getStation } from '@/lib/db/queries/stations'
-import { getCurrentPrices, getBaselinePrices } from '@/lib/db/queries/prices'
+import { getStation } from '@/lib/firebase-admin/queries/stations'
+import { getCurrentPrices, getBaselinePrices } from '@/lib/firebase-admin/queries/prices'
 
 export async function GET(
   _request: NextRequest,

@@ -1,5 +1,5 @@
 import { PageHeader } from '@/components/layout/page-header'
-import { searchStations } from '@/lib/db/queries/stations'
+import { searchStations } from '@/lib/firebase-admin/queries/stations'
 import { StationEditor } from '@/components/admin/station-editor'
 import type { Metadata } from 'next'
 

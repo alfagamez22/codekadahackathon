@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { setUserRole, verifyIdToken } from '@/lib/firebase-admin/auth'
 import { resolveUserRole } from '@/lib/auth/superadmin'
 import { setSessionCookie } from '@/lib/auth/session'
-import { upsertUser } from '@/lib/db/queries/users'
+import { upsertUser } from '@/lib/firebase-admin/queries/users'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,14 +22,14 @@ export async function POST(request: NextRequest) {
 
     await setSessionCookie(idToken)
 
-    // Mirror user to PostgreSQL on first auth
-    await upsertUser({
+    // Mirror user to PostgreSQL — non-blocking so DB unavailability doesn't break auth
+    upsertUser({
       id: decoded.uid,
       displayName: decoded.name ?? null,
       email: decoded.email ?? null,
       photoURL: decoded.picture ?? null,
       role: role === 'superadmin' ? 'admin' : role,
-    })
+    }).catch((err) => console.error('upsertUser failed:', err))
 
     return NextResponse.json({ success: true })
   } catch (error) {

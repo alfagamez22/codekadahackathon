@@ -1,4 +1,4 @@
-import type { getSystemStats } from '@/lib/db/queries/analytics'
+import type { getSystemStats } from '@/lib/firebase-admin/queries/analytics'
 
 type SystemStats = Awaited<ReturnType<typeof getSystemStats>>
 

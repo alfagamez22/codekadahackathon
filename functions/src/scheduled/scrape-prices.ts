@@ -1,5 +1,4 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler'
-import sql from '../utils/db'
 import { db } from '../utils/firestore-admin'
 import { scrapeDOEPH } from '../scraper/sources/doe-ph'
 import { scrapePetron } from '../scraper/sources/petron'
@@ -33,11 +32,6 @@ export const scheduledScrape = onSchedule('every 6 hours', async () => {
       price: p.price,
       scraped_at: result.scrapedAt,
     }))
-
-    await sql`
-      INSERT INTO price_snapshots ${sql(rows)}
-      ON CONFLICT DO NOTHING
-    `
 
     const batch = db.batch()
     const mirroredAt = new Date().toISOString()

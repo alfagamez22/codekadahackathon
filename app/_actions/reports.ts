@@ -2,9 +2,9 @@
 
 import { requireAuth } from '@/lib/auth/guards'
 import { adminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
-import { getCurrentPrices } from '@/lib/db/queries/prices'
+import { getCurrentPrices } from '@/lib/firebase-admin/queries/prices'
 import { priceReportSchema } from '@/lib/utils/validators'
-import { incrementUserReportCount } from '@/lib/db/queries/users'
+import { incrementUserReportCount } from '@/lib/firebase-admin/queries/users'
 import { updateTag } from 'next/cache'
 import type { PriceReportInput } from '@/lib/utils/validators'
 

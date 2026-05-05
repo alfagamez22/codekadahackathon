@@ -1,10 +1,10 @@
 'use server'
 
 import { requireAuth, requireRole } from '@/lib/auth/guards'
-import { updateUserRole as dbUpdateUserRole } from '@/lib/db/queries/users'
+import { updateUserRole as dbUpdateUserRole } from '@/lib/firebase-admin/queries/users'
 import { setUserRole } from '@/lib/firebase-admin/auth'
 import { adminDb } from '@/lib/firebase-admin/firestore'
-import { upsertUser } from '@/lib/db/queries/users'
+import { upsertUser } from '@/lib/firebase-admin/queries/users'
 import type { UserRole } from '@/types/auth'
 
 export async function updateProfileAction(data: {

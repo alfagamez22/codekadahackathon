@@ -1,6 +1,6 @@
 import { PageHeader } from '@/components/layout/page-header'
 import { UserManagementTable } from '@/components/admin/user-management-table'
-import { listUsers } from '@/lib/db/queries/users'
+import { listUsers } from '@/lib/firebase-admin/queries/users'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'User Management' }
