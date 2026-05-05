@@ -23,6 +23,7 @@ export async function Header() {
             <nav className="hidden md:flex items-center gap-1">
               <Link href="/dashboard" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Dashboard</Link>
               <Link href="/stations/nearby" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Nearby</Link>
+              <Link href="/route-planner" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Route</Link>
               <Link href="/validate" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Validate</Link>
               {(session.role === 'superadmin' || session.role === 'admin' || session.role === 'moderator') && (
                 <Link href={session.role === 'superadmin' ? '/superadmin' : session.role === 'admin' ? '/admin' : '/moderator'} className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">
