@@ -1,22 +1,12 @@
 'use server'
 
 import { requireAuth, requireRole } from '@/lib/auth/guards'
-import { updateUserRole as dbUpdateUserRole } from '@/lib/db/queries/users'
+import { upsertUser, updateUserRole } from '@/lib/firebase-admin/queries'
 import { setUserRole } from '@/lib/firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
-import getAdminApp from '@/lib/firebase-admin'
-import { upsertUser } from '@/lib/db/queries/users'
+import { adminDb } from '@/lib/firebase-admin/firestore'
 import type { UserRole } from '@/types/auth'
 
-async function getAdminDb() {
-  const app = await getAdminApp()
-  return getFirestore(app)
-}
-
-export async function updateProfileAction(data: {
-  displayName?: string
-  photoURL?: string
-}) {
+export async function updateProfileAction(data: { displayName?: string; photoURL?: string }) {
   const session = await requireAuth()
   await upsertUser({
     id: session.uid,
@@ -29,11 +19,10 @@ export async function updateProfileAction(data: {
 export async function assignRoleAction(targetUserId: string, role: UserRole) {
   const session = await requireRole(['admin'])
 
-  await dbUpdateUserRole(targetUserId, role)
+  await updateUserRole(targetUserId, role)
   await setUserRole(targetUserId, role)
 
-  const db = await getAdminDb()
-  await db.collection('auditLogs').add({
+  await adminDb.collection('auditLogs').add({
     adminId: session.uid,
     action: 'assign_role',
     targetType: 'user',

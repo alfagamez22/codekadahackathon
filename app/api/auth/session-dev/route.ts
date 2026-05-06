@@ -2,14 +2,12 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { setDevSessionCookie } from '@/lib/auth/session'
-import { upsertUser } from '@/lib/db/queries/users'
+import { upsertUser } from '@/lib/firebase-admin/queries'
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
-    // Dev mode: Create simple dev session
     await setDevSessionCookie()
 
-    // Create dev user in database
     await upsertUser({
       id: 'dev-user-123',
       displayName: 'Dev User',

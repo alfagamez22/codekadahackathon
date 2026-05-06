@@ -18,10 +18,35 @@ This version has breaking changes — APIs, conventions, and file structure may 
 | Styling | Tailwind CSS v4 via PostCSS plugin (no `tailwind.config.*` — config lives in CSS) |
 | Validation | Zod v4 |
 | Client data | TanStack Query v5 (`useQuery`, `useMutation`) |
-| Server data | Server Actions + raw SQL via `postgres` package |
-| Auth | Firebase Auth (client) + Firebase Admin (server) |
-| Database | Dual: PostgreSQL (`lib/db/`) + Firestore (`lib/firebase-admin/`) |
+| Server data | Server Actions + Firestore via Firebase Admin SDK |
+| Auth | Firebase Auth (client) + Firebase Admin (server session cookies) |
+| Database | **Firestore only** — see warning below |
 | Cloud functions | Separate `functions/` package (CommonJS, Node 20, Firebase Functions v5) |
+
+---
+
+## ⚠️ Database: Firestore Only — Do Not Use Postgres
+
+The **only database is Firestore**. All data reads and writes must go through:
+- `lib/firebase-admin/firestore.ts` — server-side (`adminDb`)
+- `lib/firebase/firestore.ts` — client-side real-time subscriptions
+
+`lib/db/` (postgres queries, migrations, schema) is **legacy dead code** that was never cleaned up.
+`POSTGRES_URL` is intentionally absent from `.env.local`. **Do not import from `lib/db/` or `@/lib/db`.**
+If you encounter imports from `lib/db/` in existing code, treat them as bugs to be replaced with Firestore equivalents.
+
+### Firestore Collections
+
+| Collection | Purpose |
+|---|---|
+| `users` | User profiles and roles |
+| `stations` | Gas station data |
+| `fuelPrices` | Current fuel prices per station |
+| `priceReports` | Crowdsourced price submissions |
+| `priceReports/{id}/votes` | Subcollection of confirm/reject/flag votes |
+| `auditLogs` | Admin action history |
+| `systemConfig` | App-wide configuration (thresholds, cooldowns) |
+| `pushTokens` | FCM device tokens for push notifications |
 
 ---
 
@@ -40,11 +65,32 @@ npm run lint         # ESLint (flat config, eslint-config-next)
 
 # Firebase
 npm run firebase:seed         # Seed Firestore
-npm run firebase:sync-sql     # Sync Postgres → Firestore
 npm run firebase:bootstrap    # Deploy Firestore rules + seed
 ```
 
 **There are no tests.** No test framework is configured. Do not create test files unless explicitly asked.
+
+---
+
+## Required Environment Variables
+
+The `.env.local` for local dev must contain:
+
+```
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_FIREBASE_API_KEY="..."
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="..."
+NEXT_PUBLIC_FIREBASE_PROJECT_ID="..."
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="..."
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="..."
+NEXT_PUBLIC_FIREBASE_APP_ID="..."
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="..."
+FIREBASE_ADMIN_PROJECT_ID="..."
+FIREBASE_ADMIN_CLIENT_EMAIL="..."
+FIREBASE_ADMIN_PRIVATE_KEY="..."
+```
+
+Do not add `POSTGRES_URL` — Postgres is not part of this project.
 
 ---
 
@@ -63,11 +109,9 @@ components/          # Shared React components (admin, auth, layout, stations, u
 hooks/               # Custom React hooks (use-*.ts)
 lib/
   auth/              # guards.ts, session.ts — requireAuth(), requireRole()
-  db/
-    queries/         # SQL query functions
-    schema.ts        # DB schema definitions
+  db/                # ⚠️ LEGACY dead code — do not use
   firebase/          # Client SDK (auth, firestore, messaging)
-  firebase-admin/    # Admin SDK (auth, firestore, sql-mirror)
+  firebase-admin/    # Admin SDK (auth, firestore)
   utils/             # format.ts, geo.ts, validators.ts (Zod schemas)
 src/features/        # Feature-slice architecture (gas-prices, osm-stations)
 types/               # Shared TypeScript types (api.ts, station.ts, report.ts, …)
@@ -103,6 +147,7 @@ Always use `import type` for pure type imports.
 - Add `'use client'` at the top of any file that uses React hooks or browser APIs.
 - Add `import 'server-only'` in server-only utilities (e.g., `lib/auth/guards.ts`) to prevent accidental client import.
 - Server Components are the default. Do not add `'use client'` unless necessary.
+- **Never set cookies from a Server Component** — only from Server Actions or Route Handlers.
 
 ### Server Actions (`app/_actions/`)
 
@@ -125,6 +170,19 @@ if (!parsed.success) return { error: parsed.error.issues[0].message }
 ```
 
 Always call `requireAuth()` or `requireRole([...])` at the top of protected actions.
+
+### Firestore Access Patterns
+
+Server-side writes and reads use `adminDb` from `lib/firebase-admin/firestore.ts`:
+
+```ts
+import { adminDb } from '@/lib/firebase-admin/firestore'
+await adminDb.collection('stations').doc(id).set(data)
+const snap = await adminDb.collection('users').doc(uid).get()
+```
+
+Client-side real-time subscriptions use helpers from `lib/firebase/firestore.ts`.
+Use Firestore transactions (`adminDb.runTransaction`) for atomic multi-document updates (e.g., voting).
 
 ### API Route Handlers (`app/api/`)
 
@@ -161,7 +219,6 @@ Always check `res.ok` before parsing JSON. Throw an `Error` on failure so TanSta
 | Zod schemas | `camelCaseSchema` (e.g., `stationSchema`) |
 | Types | `PascalCase` |
 | Constants | `SCREAMING_SNAKE_CASE` |
-| SQL query fns | `camelCase` verbs (e.g., `getStation`, `updateStation`) |
 
 ### Error Handling
 
@@ -190,6 +247,7 @@ Always check `res.ok` before parsing JSON. Throw an `Error` on failure so TanSta
 - Uses **CommonJS** (`module: commonjs` in tsconfig) — use `require`/`module.exports` conventions, or `import`/`export` compiled to CJS.
 - Build: `npm run build` inside `functions/`.
 - Deploy: `firebase deploy --only functions`.
+- Scheduled functions scrape gas prices on a timer; Firestore triggers handle downstream updates.
 
 ---
 

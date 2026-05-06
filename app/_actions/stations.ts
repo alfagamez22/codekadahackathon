@@ -1,12 +1,10 @@
 'use server'
 
 import { requireRole } from '@/lib/auth/guards'
-import { createStation, updateStation, deleteStation } from '@/lib/db/queries/stations'
-import { upsertConfirmedPrice } from '@/lib/db/queries/prices'
+import { createStation, updateStation, deleteStation, upsertConfirmedPrice } from '@/lib/firebase-admin/queries'
 import { adminDb } from '@/lib/firebase-admin/firestore'
 import { stationSchema } from '@/lib/utils/validators'
 import { updateTag } from 'next/cache'
-import sql from '@/lib/db'
 import type { StationInput } from '@/lib/utils/validators'
 import type { FuelType } from '@/types/station'
 
@@ -17,7 +15,6 @@ export async function createStationAction(input: StationInput) {
 
   const id = await createStation(parsed.data)
 
-  // Audit log
   await adminDb.collection('auditLogs').add({
     adminId: session.uid,
     action: 'create_station',

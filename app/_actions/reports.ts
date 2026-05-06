@@ -2,10 +2,9 @@
 
 import { requireAuth } from '@/lib/auth/guards'
 import { adminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
+import { getCurrentPrices, incrementUserReportCount } from '@/lib/firebase-admin/queries'
 import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'
-import { getCurrentPrices } from '@/lib/db/queries/prices'
 import { priceReportSchema } from '@/lib/utils/validators'
-import { incrementUserReportCount } from '@/lib/db/queries/users'
 import { updateTag } from 'next/cache'
 import type { PriceReportInput } from '@/lib/utils/validators'
 
@@ -31,13 +30,8 @@ export async function submitPriceReportAction(input: PriceReportInput) {
       createdAt?: string
     }
 
-    if (report.stationId !== stationId || report.fuelType !== fuelType) {
-      return false
-    }
-
-    if (report.status !== 'pending' && report.status !== 'confirmed') {
-      return false
-    }
+    if (report.stationId !== stationId || report.fuelType !== fuelType) return false
+    if (report.status !== 'pending' && report.status !== 'confirmed') return false
 
     const createdAtMs = Date.parse(report.createdAt ?? '')
     return Number.isFinite(createdAtMs) && createdAtMs >= cooldownCutoffMs
@@ -55,10 +49,12 @@ export async function submitPriceReportAction(input: PriceReportInput) {
 
   if (matchingPrice) {
     const updatedAtMs = Date.parse(matchingPrice.updatedAt)
-    const isFreshEnough = Number.isFinite(updatedAtMs) && Date.now() - updatedAtMs <= staleThresholdMs
+    const isFreshEnough =
+      Number.isFinite(updatedAtMs) && Date.now() - updatedAtMs <= staleThresholdMs
 
     if (isFreshEnough) {
-      const deltaPercent = Math.abs(reportedPrice - matchingPrice.currentPrice) / matchingPrice.currentPrice * 100
+      const deltaPercent =
+        (Math.abs(reportedPrice - matchingPrice.currentPrice) / matchingPrice.currentPrice) * 100
 
       if (deltaPercent > config.priceTolerancePercent) {
         return {
@@ -71,7 +67,11 @@ export async function submitPriceReportAction(input: PriceReportInput) {
   const expiresAt = new Date(Date.now() + config.reportExpiryHours * 3600 * 1000).toISOString()
   const nowIso = new Date().toISOString()
   const priceDeltaPercent = matchingPrice
-    ? Number((((reportedPrice - matchingPrice.currentPrice) / matchingPrice.currentPrice) * 100).toFixed(2))
+    ? Number(
+        (((reportedPrice - matchingPrice.currentPrice) / matchingPrice.currentPrice) * 100).toFixed(
+          2
+        )
+      )
     : null
 
   const docRef = await adminDb.collection('priceReports').add({
