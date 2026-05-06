@@ -8,73 +8,63 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Agent Guidelines
 
-## Stack Overview
+## Stack
 
 | Concern | Approach |
 |---|---|
-| Framework | Next.js 16.2.4 — App Router, non-standard version; consult `node_modules/next/dist/docs/` |
+| Framework | Next.js 16.2.4 — App Router; consult `node_modules/next/dist/docs/` |
 | React | 19.2.4 |
 | Language | TypeScript 5, strict mode |
-| Styling | Tailwind CSS v4 via PostCSS plugin (no `tailwind.config.*` — config lives in CSS) |
+| Styling | Tailwind CSS v4 via PostCSS (no `tailwind.config.*` — config lives in CSS) |
 | Validation | Zod v4 |
 | Client data | TanStack Query v5 (`useQuery`, `useMutation`) |
-| Server data | Server Actions + Firestore via Firebase Admin SDK |
-| Auth | Firebase Auth (client) + Firebase Admin (server session cookies) |
+| Server data | Server Actions + `lib/firebase-admin/queries.ts` |
+| Auth | Firebase Auth (client) + Firebase Admin SDK (server session cookies) |
 | Database | **Firestore only** — see warning below |
 | Cloud functions | Separate `functions/` package (CommonJS, Node 20, Firebase Functions v5) |
 
 ---
 
-## ⚠️ Database: Firestore Only — Do Not Use Postgres
+## ⚠️ Firestore Only — No Postgres
 
-The **only database is Firestore**. All data reads and writes must go through:
-- `lib/firebase-admin/firestore.ts` — server-side (`adminDb`)
-- `lib/firebase/firestore.ts` — client-side real-time subscriptions
+All data access goes through:
+- **`lib/firebase-admin/queries.ts`** — all server-side CRUD (stations, prices, users, analytics)
+- **`lib/firebase-admin/firestore.ts`** — `adminDb` instance + `getSystemConfig()`
+- **`lib/firebase/firestore.ts`** — client-side real-time subscriptions
 
-`lib/db/` (postgres queries, migrations, schema) is **legacy dead code** that was never cleaned up.
-`POSTGRES_URL` is intentionally absent from `.env.local`. **Do not import from `lib/db/` or `@/lib/db`.**
-If you encounter imports from `lib/db/` in existing code, treat them as bugs to be replaced with Firestore equivalents.
+`lib/db/` is **dead legacy code** — do not import from it. `lib/firebase-admin/sql-mirror.ts` is also dead. If you find imports from either, replace them with equivalents from `lib/firebase-admin/queries.ts`.
 
 ### Firestore Collections
 
 | Collection | Purpose |
 |---|---|
 | `users` | User profiles and roles |
-| `stations` | Gas station data |
-| `fuelPrices` | Current fuel prices per station |
+| `stations` | Gas station data (includes `lowestPrice`, `lowestFuelType` denormalized fields) |
+| `fuelPrices` | Current price per station+fuelType (doc ID: `{stationId}_{fuelType}`) |
+| `priceHistory` | Append-only price change log |
 | `priceReports` | Crowdsourced price submissions |
-| `priceReports/{id}/votes` | Subcollection of confirm/reject/flag votes |
+| `priceReports/{id}/votes` | Confirm/reject/flag votes subcollection |
 | `auditLogs` | Admin action history |
-| `systemConfig` | App-wide configuration (thresholds, cooldowns) |
-| `pushTokens` | FCM device tokens for push notifications |
+| `systemConfig` | App-wide thresholds and cooldowns |
+| `pushTokens` | FCM device tokens |
 
 ---
 
 ## Commands
 
 ```bash
-# Development
-npm run dev          # Next.js dev server (Turbopack enabled)
-
-# Production
-npm run build        # Type-check + build
-npm run start        # Serve production build
-
-# Lint
-npm run lint         # ESLint (flat config, eslint-config-next)
-
-# Firebase
-npm run firebase:seed         # Seed Firestore
+npm run dev          # Next.js dev server (Turbopack)
+npm run build        # Type-check + production build
+npm run lint         # ESLint flat config (eslint-config-next)
+npm run firebase:seed         # Seed Firestore with sample data
 npm run firebase:bootstrap    # Deploy Firestore rules + seed
 ```
 
-**There are no tests.** No test framework is configured. Do not create test files unless explicitly asked.
+**No tests exist.** Do not create test files unless explicitly asked.
 
 ---
 
-## Required Environment Variables
-
-The `.env.local` for local dev must contain:
+## Required Environment Variables (`.env.local`)
 
 ```
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
@@ -90,7 +80,7 @@ FIREBASE_ADMIN_CLIENT_EMAIL="..."
 FIREBASE_ADMIN_PRIVATE_KEY="..."
 ```
 
-Do not add `POSTGRES_URL` — Postgres is not part of this project.
+Do not add `POSTGRES_URL` — Postgres is not used.
 
 ---
 
@@ -98,167 +88,88 @@ Do not add `POSTGRES_URL` — Postgres is not part of this project.
 
 ```
 app/
-  _actions/          # Server Actions ('use server') — auth, stations, reports, etc.
-  (app)/             # Authenticated route group
-  (auth)/            # Login / register
-  (marketing)/       # Public landing pages
-  (protected-admin)/ # Admin-only routes
-  (protected-moderator)/ # Moderator-only routes
-  api/               # API Route Handlers
-components/          # Shared React components (admin, auth, layout, stations, ui, …)
-hooks/               # Custom React hooks (use-*.ts)
+  _actions/            # Server Actions ('use server')
+  (app)/               # Authenticated routes
+  (auth)/              # Login / register
+  (marketing)/         # Public pages
+  (protected-admin)/   # Admin-only routes
+  (protected-moderator)/
+  api/                 # Route Handlers
+components/            # Shared UI components
+hooks/                 # use-*.ts custom hooks
 lib/
-  auth/              # guards.ts, session.ts — requireAuth(), requireRole()
-  db/                # ⚠️ LEGACY dead code — do not use
-  firebase/          # Client SDK (auth, firestore, messaging)
-  firebase-admin/    # Admin SDK (auth, firestore)
-  utils/             # format.ts, geo.ts, validators.ts (Zod schemas)
-src/features/        # Feature-slice architecture (gas-prices, osm-stations)
-types/               # Shared TypeScript types (api.ts, station.ts, report.ts, …)
-functions/           # Firebase Cloud Functions (separate npm workspace)
+  auth/                # guards.ts (requireAuth, requireRole), session.ts
+  db/                  # ⚠️ DEAD — do not use
+  firebase/            # Client SDK (auth, firestore, messaging)
+  firebase-admin/
+    queries.ts         # ← all server-side Firestore CRUD lives here
+    firestore.ts       # adminDb instance + getSystemConfig
+    auth.ts            # verifyIdToken, setUserRole, createSessionCookie
+    sql-mirror.ts      # ⚠️ DEAD — do not use
+  utils/               # format.ts, geo.ts, validators.ts
+src/features/          # Feature-slice modules (gas-prices, osm-stations)
+types/                 # Shared TS types
+functions/             # Firebase Cloud Functions (separate npm workspace)
 ```
 
 ---
 
 ## Code Style
 
-### TypeScript
+**TypeScript:** strict mode, no `any`, no `@ts-ignore` without justification. Prefer `type` over `interface`. Infer types from Zod: `export type Foo = z.infer<typeof fooSchema>`. Use `@/` alias for all non-relative imports.
 
-- Strict mode is enabled. No `any`, no `@ts-ignore` without justification.
-- Prefer `type` over `interface` for object shapes.
-- Infer types from Zod schemas: `export type Foo = z.infer<typeof fooSchema>`.
-- Export schemas and their inferred types from the same file (`lib/utils/validators.ts`).
-- Use the `@/` path alias for all non-relative imports (resolves to repo root).
+**Imports order:** React/Next.js → third-party → `@/lib`, `@/hooks`, `@/types` → relative → `import type` last.
 
-### Imports
+**Server vs client:** Default to Server Components. Add `'use client'` only when hooks or browser APIs are needed. Add `'use server'` at the top of every action file. Add `import 'server-only'` in server utilities. **Never set cookies from a Server Component** — only from Server Actions or Route Handlers.
 
-Order (enforced by linter):
-1. React / Next.js framework imports
-2. Third-party packages
-3. Internal `@/lib/*`, `@/hooks/*`, `@/types/*`
-4. Local relative imports
-5. Type-only imports last (`import type { … }`)
-
-Always use `import type` for pure type imports.
-
-### Server vs. Client Boundaries
-
-- Add `'use server'` at the top of every Server Action file.
-- Add `'use client'` at the top of any file that uses React hooks or browser APIs.
-- Add `import 'server-only'` in server-only utilities (e.g., `lib/auth/guards.ts`) to prevent accidental client import.
-- Server Components are the default. Do not add `'use client'` unless necessary.
-- **Never set cookies from a Server Component** — only from Server Actions or Route Handlers.
-
-### Server Actions (`app/_actions/`)
-
-Return a discriminated result object — never throw to the caller:
-
+**Server Actions** return a discriminated union — never throw to the caller:
 ```ts
-// Good
-return { success: true, stationId: id }
-return { error: 'Validation failed: name is required' }
-
-// Bad — do not throw
-throw new Error('...')
+return { success: true, stationId: id }   // ✓
+return { error: 'Validation failed' }      // ✓
+throw new Error('...')                     // ✗
 ```
+Validate with Zod `.safeParse()` and guard with `requireAuth()` / `requireRole([...])` at the top.
 
-Validate all inputs with Zod `.safeParse()`. Return the first issue message on failure:
+**API Routes:** `NextResponse.json({ error }, { status })` for errors. Validate body with Zod before any DB access.
 
-```ts
-const parsed = schema.safeParse(input)
-if (!parsed.success) return { error: parsed.error.issues[0].message }
-```
+**Client fetching:** TanStack Query v5 — always check `res.ok`, throw on failure so the query captures the error.
 
-Always call `requireAuth()` or `requireRole([...])` at the top of protected actions.
+**Styling:** Tailwind utility classes only. No inline styles. No `tailwind.config.ts`.
 
-### Firestore Access Patterns
-
-Server-side writes and reads use `adminDb` from `lib/firebase-admin/firestore.ts`:
-
-```ts
-import { adminDb } from '@/lib/firebase-admin/firestore'
-await adminDb.collection('stations').doc(id).set(data)
-const snap = await adminDb.collection('users').doc(uid).get()
-```
-
-Client-side real-time subscriptions use helpers from `lib/firebase/firestore.ts`.
-Use Firestore transactions (`adminDb.runTransaction`) for atomic multi-document updates (e.g., voting).
-
-### API Route Handlers (`app/api/`)
-
-- Use `NextResponse.json({ error: '...' }, { status: 4xx })` for errors.
-- Validate request bodies with Zod before any DB access.
-- Return consistent JSON shapes.
-
-### Client Data Fetching
-
-Use TanStack Query v5 for all client-side async state:
-
-```ts
-useQuery({
-  queryKey: ['stations', params],
-  queryFn: async () => {
-    const res = await fetch(`/api/stations?${qs}`)
-    if (!res.ok) throw new Error('Failed to fetch stations')
-    return res.json() as Promise<StationListItem[]>
-  },
-  staleTime: 60_000,
-})
-```
-
-Always check `res.ok` before parsing JSON. Throw an `Error` on failure so TanStack Query can catch it.
-
-### Naming Conventions
-
-| Thing | Convention |
-|---|---|
-| Files / directories | `kebab-case` |
-| React components | `PascalCase` (file name matches export) |
-| Hooks | `useCamelCase` in `hooks/use-*.ts` |
-| Server Actions | `camelCaseAction` suffix (e.g., `createStationAction`) |
-| Zod schemas | `camelCaseSchema` (e.g., `stationSchema`) |
-| Types | `PascalCase` |
-| Constants | `SCREAMING_SNAKE_CASE` |
-
-### Error Handling
-
-- Server Actions: return `{ error: string }` — no thrown errors to the caller.
-- API routes: `NextResponse.json({ error }, { status })`.
-- Client hooks: let TanStack Query capture thrown errors; surface via `isError` / `error`.
-- Auth failures in server utilities: call `redirect('/login')` or `redirect('/dashboard')` (Next.js `redirect()` throws internally — this is expected).
-
-### Styling (Tailwind v4)
-
-- Tailwind v4 uses a CSS-first config. No `tailwind.config.ts`.
-- Use utility classes directly. Avoid inline styles.
-- Component variants live in the component file, not a separate style file.
-
-### Validation
-
-- All external input (form data, API bodies, URL params) must pass through a Zod schema.
-- Define schemas in `lib/utils/validators.ts` or co-located feature files.
-- Use `.safeParse()` (not `.parse()`) in server actions and API routes so errors can be returned gracefully.
+**Validation:** All external input through Zod. Use `.safeParse()`, not `.parse()`, in actions and route handlers.
 
 ---
 
-## Firebase Cloud Functions (`functions/`)
+## Naming Conventions
 
-- Separate npm workspace; run commands from the `functions/` directory.
-- Uses **CommonJS** (`module: commonjs` in tsconfig) — use `require`/`module.exports` conventions, or `import`/`export` compiled to CJS.
-- Build: `npm run build` inside `functions/`.
-- Deploy: `firebase deploy --only functions`.
-- Scheduled functions scrape gas prices on a timer; Firestore triggers handle downstream updates.
+| Thing | Convention |
+|---|---|
+| Files / dirs | `kebab-case` |
+| React components | `PascalCase` |
+| Hooks | `useCamelCase` (`hooks/use-*.ts`) |
+| Server Actions | `camelCaseAction` (e.g. `createStationAction`) |
+| Zod schemas | `camelCaseSchema` (e.g. `stationSchema`) |
+| Types | `PascalCase` |
+| Constants | `SCREAMING_SNAKE_CASE` |
 
 ---
 
 ## Auth & Roles
 
-Roles (from `types/auth.ts`): `user`, `moderator`, `admin`, `superadmin`.
+Roles: `user` | `moderator` | `admin` | `superadmin` (from `types/auth.ts`).
+`superadmin` passes all role checks implicitly.
 
 ```ts
-// In any server action or route that requires auth:
-const session = await requireAuth()         // any authenticated user
-const session = await requireRole(['admin']) // admin or superadmin
+const session = await requireAuth()           // any signed-in user
+const session = await requireRole(['admin'])  // admin or superadmin only
 ```
 
-`superadmin` implicitly passes all role checks.
+Auth failures call `redirect()` internally — this is expected, not an error.
+
+---
+
+## Firebase Cloud Functions (`functions/`)
+
+Separate npm workspace. Uses CommonJS (`module: commonjs`).
+Build: `npm run build` inside `functions/`. Deploy: `firebase deploy --only functions`.
+Scheduled functions scrape gas prices; Firestore triggers handle downstream updates.
