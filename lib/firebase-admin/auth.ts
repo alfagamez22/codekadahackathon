@@ -4,32 +4,43 @@ import getAdminApp from './index'
 import { resolveUserRole } from '@/lib/auth/superadmin'
 import type { SessionUser, UserRole } from '@/types/auth'
 
-function getAdminAuth() {
-  return getAuth(getAdminApp())
+async function getAdminAuth() {
+  const app = await getAdminApp()
+  return getAuth(app)
 }
 
 export async function verifyIdToken(idToken: string) {
-  return getAdminAuth().verifyIdToken(idToken)
+  const auth = await getAdminAuth()
+  return auth.verifyIdToken(idToken)
 }
 
 export async function verifySessionCookie(sessionCookie: string) {
-  return getAdminAuth().verifySessionCookie(sessionCookie, true)
+  const auth = await getAdminAuth()
+  return auth.verifySessionCookie(sessionCookie, true)
 }
 
 export async function createSessionCookie(idToken: string, expiresIn: number) {
-  return getAdminAuth().createSessionCookie(idToken, { expiresIn })
+  const auth = await getAdminAuth()
+  return auth.createSessionCookie(idToken, { expiresIn })
 }
 
 export async function setUserRole(uid: string, role: UserRole) {
-  await getAdminAuth().setCustomUserClaims(uid, { role })
+  const auth = await getAdminAuth()
+  if (!auth) {
+    console.error('getAdminAuth returned undefined/null in setUserRole')
+    throw new Error('Firebase Admin Auth not initialized')
+  }
+  await auth.setCustomUserClaims(uid, { role })
 }
 
 export async function getAdminUser(uid: string) {
-  return getAdminAuth().getUser(uid)
+  const auth = await getAdminAuth()
+  return auth.getUser(uid)
 }
 
 export async function revokeRefreshTokens(uid: string) {
-  await getAdminAuth().revokeRefreshTokens(uid)
+  const auth = await getAdminAuth()
+  await auth.revokeRefreshTokens(uid)
 }
 
 export async function getSessionUser(sessionCookie: string): Promise<SessionUser | null> {
