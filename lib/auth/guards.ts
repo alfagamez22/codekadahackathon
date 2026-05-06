@@ -5,7 +5,7 @@ import type { SessionUser, UserRole } from '@/types/auth'
 
 export async function requireAuth(): Promise<SessionUser> {
   const session = await readSession()
-  if (!session) redirect('/login')
+  if (!session) redirect('/')
   return session
 }
 

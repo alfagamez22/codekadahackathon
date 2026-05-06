@@ -6,9 +6,7 @@ import { resolveUserRole } from '@/lib/auth/superadmin'
 import { setSessionCookie } from '@/lib/auth/session'
 import { upsertUser } from '@/lib/firebase-admin/queries/users'
 
-function roleToRedirect(role: 'user' | 'moderator' | 'admin' | 'superadmin') {
-  if (role === 'moderator') return '/moderator'
-  if (role === 'admin' || role === 'superadmin') return '/admin'
+function roleToRedirect() {
   return '/dashboard'
 }
 
@@ -37,7 +35,7 @@ export async function POST(request: NextRequest) {
       role: role === 'superadmin' ? 'admin' : role,
     }).catch((err) => console.error('[session] upsertUser failed:', err))
 
-    return NextResponse.json({ success: true, role, redirectTo: roleToRedirect(role) })
+    return NextResponse.json({ success: true, role, redirectTo: roleToRedirect() })
   } catch (error) {
     console.error('[session] Session creation failed:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'

@@ -12,22 +12,26 @@ export function usePwaInstall() {
   const [isInstalled, setIsInstalled] = useState(false)
 
   useEffect(() => {
-    const isStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
-
-    if (isStandalone) {
-      setIsInstalled(true)
-      return
-    }
-
     const handler = (e: Event) => {
       e.preventDefault()
       setPromptEvent(e as BeforeInstallPromptEvent)
     }
 
+    const timeoutId = window.setTimeout(() => {
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
+
+      if (isStandalone) {
+        setIsInstalled(true)
+      }
+    }, 0)
+
     window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.removeEventListener('beforeinstallprompt', handler)
+    }
   }, [])
 
   const install = async () => {

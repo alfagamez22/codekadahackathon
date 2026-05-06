@@ -14,6 +14,7 @@ export async function getSystemStats() {
   const byFuelType = new Map<string, number[]>()
   for (const doc of pricesSnap.docs) {
     const { fuelType, currentPrice } = doc.data() as { fuelType: FuelType; currentPrice: number }
+    if (typeof currentPrice !== 'number' || !Number.isFinite(currentPrice)) continue
     if (!byFuelType.has(fuelType)) byFuelType.set(fuelType, [])
     byFuelType.get(fuelType)!.push(currentPrice)
   }
