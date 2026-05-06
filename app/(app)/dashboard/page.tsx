@@ -3,12 +3,13 @@ import { getSystemStats, getTopContributors } from '@/lib/firebase-admin/queries
 import { listUsers } from '@/lib/firebase-admin/queries/users'
 import { searchStations } from '@/lib/firebase-admin/queries/stations'
 import { getSystemConfig } from '@/lib/firebase-admin/firestore'
-import { fetchGaswatchScript, parseGaswatchStations, type GaswatchStation } from '@/lib/gaswatchph'
+import { fetchGaswatchScript, parseGaswatchStations, parsePriceHistory, findCurrentWeekPrices, getPhilippineDateString, type GaswatchStation, type GaswatchPriceWeek } from '@/lib/gaswatchph'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/layout/page-header'
 import { UserManagementTable } from '@/components/admin/user-management-table'
 import { StationEditor } from '@/components/admin/station-editor'
 import { SystemConfigForm } from '@/components/admin/system-config-form'
+import { PriceAutoRefresher } from '@/components/dashboard/price-auto-refresher'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import type { Metadata } from 'next'
@@ -86,14 +87,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
   const activePanel: DashboardPanel = isAdmin && isDashboardPanel(requestedPanel) ? requestedPanel : 'overview'
   const phTimestamp = getPhilippineTimestamp()
 
-  const [stats, contributors, gaswatchStations, usersData, stationsData, config] = await Promise.all([
+  const [stats, contributors, gaswatchSnapshot, usersData, stationsData, config] = await Promise.all([
     getSystemStats(),
     getTopContributors(5),
-    activePanel === 'overview' ? getGaswatchStationsSnapshot() : Promise.resolve(null),
+    activePanel === 'overview' ? getGaswatchSnapshot() : Promise.resolve(null),
     isAdmin && activePanel === 'users' ? listUsers({}) : Promise.resolve(null),
     isAdmin && activePanel === 'stations' ? searchStations({}) : Promise.resolve(null),
     isAdmin && activePanel === 'config' ? getSystemConfig() : Promise.resolve(null),
   ])
+
+  const gaswatchStations = gaswatchSnapshot?.stations ?? null
+  const priceWeek = gaswatchSnapshot?.priceWeek ?? null
 
   const gasolineAvg = stats.averagePrices.find((p) => p.fuelType === 'gasoline')?.avgPrice
   const dashboardStats = [
@@ -143,6 +147,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
           stats={stats}
           contributors={contributors}
           gaswatchStations={gaswatchStations}
+          priceWeek={priceWeek}
           session={session}
           isAdmin={isAdmin}
           phTimestamp={phTimestamp}
@@ -152,9 +157,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
   )
 }
 
-async function getGaswatchStationsSnapshot() {
+async function getGaswatchSnapshot() {
   try {
-    return parseGaswatchStations(await fetchGaswatchScript())
+    const source = await fetchGaswatchScript()
+    const stations = parseGaswatchStations(source)
+    const history = parsePriceHistory(source)
+    const todayPh = getPhilippineDateString()
+    const priceWeek = findCurrentWeekPrices(history, todayPh)
+    return { stations, priceWeek }
   } catch (error) {
     console.error('[dashboard] GasWatchPH snapshot failed:', error)
     return null
@@ -187,6 +197,7 @@ function DashboardOverview({
   stats,
   contributors,
   gaswatchStations,
+  priceWeek,
   session,
   isAdmin,
   phTimestamp,
@@ -194,13 +205,15 @@ function DashboardOverview({
   stats: Awaited<ReturnType<typeof getSystemStats>>
   contributors: Awaited<ReturnType<typeof getTopContributors>>
   gaswatchStations: GaswatchStation[] | null
+  priceWeek: GaswatchPriceWeek | null
   session: SessionUser
   isAdmin: boolean
   phTimestamp: string
 }) {
   return (
     <>
-      <NationalAveragePrices prices={stats.averagePrices} phTimestamp={phTimestamp} />
+      <PriceAutoRefresher />
+      <NationalAveragePrices priceWeek={priceWeek} />
 
       <GaswatchSourcePanel stations={gaswatchStations} isAdmin={isAdmin} />
 
@@ -233,34 +246,83 @@ function DashboardOverview({
   )
 }
 
-function NationalAveragePrices({
-  prices,
-  phTimestamp,
-}: {
-  prices: Array<{ fuelType: string; avgPrice: number }>
-  phTimestamp: string
-}) {
-  const sortedPrices = sortAveragePrices(prices)
+const BRAND_LABELS: Record<string, string> = {
+  shell: 'Shell',
+  petron: 'Petron',
+  caltex: 'Caltex',
+  phoenix: 'Phoenix',
+  seaoil: 'Seaoil',
+  unioil: 'Unioil',
+  jetti: 'Jetti',
+  flyingv: 'Flying V',
+  cleanfuel: 'Cleanfuel',
+  total: 'TotalEnergies',
+  ptt: 'PTT',
+}
+
+function NationalAveragePrices({ priceWeek }: { priceWeek: GaswatchPriceWeek | null }) {
+  if (!priceWeek) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <CardTitle>National Average Prices</CardTitle>
+        </CardHeader>
+        <div className="rounded-lg border border-border bg-gray-50 p-4 text-sm text-muted">
+          No national average prices are available yet.
+        </div>
+      </Card>
+    )
+  }
+
+  const brandEntries = Object.entries(priceWeek.brands)
 
   return (
     <Card>
       <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-        <CardTitle>National Average Prices</CardTitle>
-        <p className="text-xs text-muted">As of {phTimestamp}</p>
+        <div>
+          <CardTitle>National Average Prices</CardTitle>
+          <p className="mt-0.5 text-xs text-muted">Week of {priceWeek.label}</p>
+        </div>
       </CardHeader>
-      {sortedPrices.length === 0 ? (
-        <div className="rounded-lg border border-border bg-gray-50 p-4 text-sm text-muted">
-          No national average prices are available yet.
+
+      {/* National averages */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 mb-5">
+        <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 text-center">
+          <div className="text-2xl font-bold text-blue-700">{formatCurrency(priceWeek.dieselAvg)}</div>
+          <div className="mt-0.5 text-xs font-medium text-blue-500 uppercase tracking-wide">Diesel</div>
+          <div className="mt-0.5 text-[10px] text-blue-400">National Average</div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {sortedPrices.map((p) => (
-            <div key={p.fuelType} className="rounded-lg bg-gray-50 p-3 text-center">
-              <div className="text-lg font-bold text-fuel-green">{formatCurrency(p.avgPrice)}</div>
-              <div className="text-xs text-muted">{formatFuelType(p.fuelType)}</div>
-            </div>
-          ))}
+        <div className="rounded-xl bg-green-50 border border-green-100 p-4 text-center">
+          <div className="text-2xl font-bold text-fuel-green">{formatCurrency(priceWeek.unleadedAvg)}</div>
+          <div className="mt-0.5 text-xs font-medium text-green-600 uppercase tracking-wide">Gasoline</div>
+          <div className="mt-0.5 text-[10px] text-green-400">National Average</div>
         </div>
+      </div>
+
+      {/* Per-brand breakdown */}
+      {brandEntries.length > 0 && (
+        <>
+          <div className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">By Brand</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {brandEntries.map(([brand, prices]) => (
+              <div key={brand} className="rounded-lg border border-border bg-gray-50 p-3">
+                <div className="mb-2 text-xs font-semibold text-slate-700">
+                  {BRAND_LABELS[brand] ?? brand.charAt(0).toUpperCase() + brand.slice(1)}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-blue-500 font-medium">Diesel</span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(prices.diesel)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-green-600 font-medium">Gasoline</span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(prices.unleaded)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </Card>
   )
