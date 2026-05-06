@@ -2,6 +2,7 @@
 
 import { requireAuth } from '@/lib/auth/guards'
 import { adminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import { getCurrentPrices } from '@/lib/db/queries/prices'
 import { priceReportSchema } from '@/lib/utils/validators'
 import { incrementUserReportCount } from '@/lib/db/queries/users'
@@ -22,7 +23,7 @@ export async function submitPriceReportAction(input: PriceReportInput) {
     .get()
 
   const cooldownCutoffMs = Date.now() - config.reportCooldownHours * 60 * 60 * 1000
-  const hasRecentDuplicate = recentReports.docs.some((doc) => {
+  const hasRecentDuplicate = recentReports.docs.some((doc: QueryDocumentSnapshot) => {
     const report = doc.data() as {
       stationId?: string
       fuelType?: string

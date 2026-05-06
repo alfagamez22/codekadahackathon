@@ -9,23 +9,32 @@ export const metadata: Metadata = { title: 'Sign in' }
 export default function LoginPage() {
   return (
     <Card padding="lg">
-      <h1 className="text-xl font-bold text-foreground mb-1">Continue with Google</h1>
-      <p className="text-sm text-muted mb-6">
-        Sign in with Google to access the app. First-time sign-in automatically creates your account.
-      </p>
-      <h1 className="text-xl font-bold text-foreground mb-1">Welcome back</h1>
-      <p className="text-sm text-muted mb-6">Sign in to track and report fuel prices.</p>
-      <LoginFormDev />
-      <div className="relative my-4">
-        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
-        <div className="relative flex justify-center text-xs text-muted"><span className="bg-card px-2">or</span></div>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Sign in</h1>
+          <p className="text-sm text-muted-foreground mt-1">Track and report fuel prices across the community.</p>
+        </div>
+
+        <GoogleSignInButton label="Continue with Google" />
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+          </div>
+        </div>
+
+        <LoginFormDev />
+
+        <p className="text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{' '}
+          <Link href="/register" className="text-primary hover:underline font-medium">
+            Create one
+          </Link>
+        </p>
       </div>
-      <GoogleSignInButton />
-      <p className="mt-4 text-center text-sm text-muted">
-        No account?{' '}
-        <Link href="/auth/register" className="text-fuel-green hover:underline font-medium">Create one</Link>
-      </p>
-      <GoogleSignInButton label="Continue with Google" />
     </Card>
   )
 }
