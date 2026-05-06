@@ -6,11 +6,16 @@ import { PageHeader } from '@/components/layout/page-header'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 
 export default async function DashboardPage() {
   const session = await requireAuth()
+
+  if (session.role === 'moderator') redirect('/moderator')
+  if (session.role === 'admin' || session.role === 'superadmin') redirect('/admin')
+
   const [stats, contributors] = await Promise.all([
     getSystemStats(),
     getTopContributors(5),
@@ -94,7 +99,7 @@ export default async function DashboardPage() {
           </CardHeader>
           <div className="flex flex-col divide-y divide-border">
             {contributors.map((c, i) => (
-              <div key={c.uid} className="flex items-center gap-3 py-3">
+              <div key={c.uid || `contributor-${i}`} className="flex items-center gap-3 py-3">
                 <div className="w-6 text-sm text-muted text-center">{i + 1}</div>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-foreground">{c.displayName ?? 'Anonymous'}</div>

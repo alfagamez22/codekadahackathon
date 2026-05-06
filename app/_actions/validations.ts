@@ -1,9 +1,9 @@
 'use server'
 
 import { requireAuth } from '@/lib/auth/guards'
-import { adminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
+import { getAdminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
 import { voteSchema } from '@/lib/utils/validators'
-import { FieldValue } from 'firebase-admin/firestore'
+import { FieldValue, Transaction, DocumentSnapshot } from 'firebase-admin/firestore'
 import type { VoteType } from '@/types/report'
 
 export async function castVoteAction(input: { reportId: string; voteType: VoteType }) {
@@ -16,14 +16,15 @@ export async function castVoteAction(input: { reportId: string; voteType: VoteTy
 
   try {
     const config = await getSystemConfig()
-    const reportRef = adminDb.collection('priceReports').doc(reportId)
+    const db = await getAdminDb()
+    const reportRef = db.collection('priceReports').doc(reportId)
     const voteRef = reportRef.collection('votes').doc(userId)
 
-    await adminDb.runTransaction(async (tx) => {
-      const reportSnap = await tx.get(reportRef)
+    await db.runTransaction(async (tx: Transaction) => {
+      const reportSnap = (await tx.get(reportRef)) as unknown as DocumentSnapshot
       if (!reportSnap.exists) throw new Error('Report not found')
 
-      const report = reportSnap.data()!
+      const report = reportSnap.data() as any
       const nowIso = new Date().toISOString()
       const expiresAtMs = Date.parse(report.expiresAt ?? '')
 
@@ -35,12 +36,12 @@ export async function castVoteAction(input: { reportId: string; voteType: VoteTy
         throw new Error('Report has expired')
       }
 
-      const existingVote = await tx.get(voteRef)
+      const existingVote = (await tx.get(voteRef)) as unknown as DocumentSnapshot
       if (existingVote.exists) throw new Error('Already voted on this report')
 
       tx.set(voteRef, { userId, voteType, votedAt: nowIso })
 
-      const update: Record<string, unknown> = { updatedAt: nowIso }
+      const update: any = { updatedAt: nowIso }
 
       if (voteType === 'confirm') {
         update.confirmCount = FieldValue.increment(1)

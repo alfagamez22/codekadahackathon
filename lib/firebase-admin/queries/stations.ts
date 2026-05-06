@@ -1,10 +1,14 @@
 import 'server-only'
 import { randomUUID } from 'crypto'
-import { adminDb } from '../firestore'
+import { getAdminDb } from '../firestore'
 import { haversineKm } from '@/lib/utils/geo'
 import type { Station, StationListItem, FuelType } from '@/types/station'
 
-function stationToListItem(station: Station): StationListItem {
+function normalizeStationId(station: Station, fallbackId: string): string {
+  return typeof station.id === 'string' && station.id.trim().length > 0 ? station.id : fallbackId
+}
+
+function stationToListItem(station: Station, fallbackId: string): StationListItem {
   const entries = Object.entries(station.latestPrices ?? {}) as [FuelType, { price: number } | undefined][]
   const lowestEntry = entries.reduce<[FuelType, number] | null>((acc, [ft, sp]) => {
     if (!sp?.price) return acc
@@ -13,7 +17,7 @@ function stationToListItem(station: Station): StationListItem {
   }, null)
 
   return {
-    id: station.id,
+    id: normalizeStationId(station, fallbackId),
     name: station.name,
     brand: station.brand ?? null,
     city: station.city,
@@ -26,9 +30,11 @@ function stationToListItem(station: Station): StationListItem {
 }
 
 export async function getStation(id: string): Promise<Station | null> {
-  const snap = await adminDb.collection('stations').doc(id).get()
+  const db = await getAdminDb()
+  const snap = await db.collection('stations').doc(id).get()
   if (!snap.exists) return null
-  return snap.data() as Station
+  const station = snap.data() as Station
+  return { ...station, id: normalizeStationId(station, snap.id) }
 }
 
 export async function searchStations(params: {
@@ -42,8 +48,12 @@ export async function searchStations(params: {
 }): Promise<{ stations: StationListItem[]; total: number }> {
   const { province, city, brand, fuelType, search, page = 1, pageSize = 20 } = params
 
-  const snap = await adminDb.collection('stations').get()
-  let all = snap.docs.map((d) => d.data() as Station)
+  const db = await getAdminDb()
+  const snap = await db.collection('stations').get()
+  let all = snap.docs.map((d) => {
+    const station = d.data() as Station
+    return { ...station, id: normalizeStationId(station, d.id) }
+  })
 
   if (province) all = all.filter((s) => s.province?.toLowerCase().includes(province.toLowerCase()))
   if (city) all = all.filter((s) => s.city?.toLowerCase().includes(city.toLowerCase()))
@@ -63,7 +73,7 @@ export async function searchStations(params: {
 
   const total = all.length
   const offset = (page - 1) * pageSize
-  const stations = all.slice(offset, offset + pageSize).map(stationToListItem)
+  const stations = all.slice(offset, offset + pageSize).map((station) => stationToListItem(station, station.id))
 
   return { stations, total }
 }
@@ -77,16 +87,18 @@ export async function getNearbyStations(params: {
 }): Promise<StationListItem[]> {
   const { lat, lng, radiusKm = 5, fuelType, limit = 20 } = params
 
-  const snap = await adminDb.collection('stations').get()
+  const db = await getAdminDb()
+  const snap = await db.collection('stations').get()
   const results: (StationListItem & { distanceKm: number })[] = []
 
   for (const doc of snap.docs) {
-    const station = doc.data() as Station
+    const rawStation = doc.data() as Station
+    const station = { ...rawStation, id: normalizeStationId(rawStation, doc.id) }
     if (fuelType && !station.fuelTypes?.includes(fuelType)) continue
 
     const distanceKm = haversineKm(lat, lng, station.latitude, station.longitude)
     if (distanceKm <= radiusKm) {
-      results.push({ ...stationToListItem(station), distanceKm })
+      results.push({ ...stationToListItem(station, station.id), distanceKm })
     }
   }
 
@@ -107,7 +119,8 @@ export async function createStation(data: {
   const id = randomUUID()
   const nowIso = new Date().toISOString()
 
-  await adminDb.collection('stations').doc(id).set({
+  const db = await getAdminDb()
+  await db.collection('stations').doc(id).set({
     id,
     name: data.name,
     brand: data.brand ?? null,
@@ -145,18 +158,20 @@ export async function updateStation(
   for (const [k, v] of Object.entries(data)) {
     if (v !== undefined) updates[k] = v
   }
-  await adminDb.collection('stations').doc(id).update(updates)
+  const db = await getAdminDb()
+  await db.collection('stations').doc(id).update(updates)
 }
 
 export async function deleteStation(id: string): Promise<void> {
-  await adminDb.collection('stations').doc(id).delete()
+  const db = await getAdminDb()
+  await db.collection('stations').doc(id).delete()
 
   const [pricesSnap, historySnap] = await Promise.all([
-    adminDb.collection('fuelPrices').where('stationId', '==', id).get(),
-    adminDb.collection('priceHistory').where('stationId', '==', id).get(),
+    db.collection('fuelPrices').where('stationId', '==', id).get(),
+    db.collection('priceHistory').where('stationId', '==', id).get(),
   ])
 
-  const batch = adminDb.batch()
+  const batch = db.batch()
   pricesSnap.docs.forEach((d) => batch.delete(d.ref))
   historySnap.docs.forEach((d) => batch.delete(d.ref))
   await batch.commit()

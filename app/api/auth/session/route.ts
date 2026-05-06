@@ -6,6 +6,12 @@ import { resolveUserRole } from '@/lib/auth/superadmin'
 import { setSessionCookie } from '@/lib/auth/session'
 import { upsertUser } from '@/lib/firebase-admin/queries/users'
 
+function roleToRedirect(role: 'user' | 'moderator' | 'admin' | 'superadmin') {
+  if (role === 'moderator') return '/moderator'
+  if (role === 'admin' || role === 'superadmin') return '/admin'
+  return '/dashboard'
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { idToken } = await request.json()
@@ -22,18 +28,19 @@ export async function POST(request: NextRequest) {
 
     await setSessionCookie(idToken)
 
-    // Mirror user to PostgreSQL — non-blocking so DB unavailability doesn't break auth
+    // Mirror user to Firestore — non-blocking so DB unavailability doesn't break auth
     upsertUser({
       id: decoded.uid,
       displayName: decoded.name ?? null,
       email: decoded.email ?? null,
       photoURL: decoded.picture ?? null,
       role: role === 'superadmin' ? 'admin' : role,
-    }).catch((err) => console.error('upsertUser failed:', err))
+    }).catch((err) => console.error('[session] upsertUser failed:', err))
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, role, redirectTo: roleToRedirect(role) })
   } catch (error) {
-    console.error('Session creation failed:', error)
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    console.error('[session] Session creation failed:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: 'Unauthorized', detail: message }, { status: 401 })
   }
 }

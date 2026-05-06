@@ -1,11 +1,12 @@
 import 'server-only'
 import { randomUUID } from 'crypto'
-import { adminDb } from '../firestore'
+import { getAdminDb } from '../firestore'
 import type { FuelPrice, PriceHistory, PriceSnapshot } from '@/types/price'
 import type { FuelType, PriceSourceType } from '@/types/station'
 
 export async function getCurrentPrices(stationId: string): Promise<FuelPrice[]> {
-  const snap = await adminDb
+  const db = await getAdminDb()
+  const snap = await db
     .collection('fuelPrices')
     .where('stationId', '==', stationId)
     .get()
@@ -24,7 +25,8 @@ export async function getPriceHistory(params: {
 }): Promise<PriceHistory[]> {
   const { stationId, fuelType, from, to, limit = 100 } = params
 
-  let query = adminDb
+  const db = await getAdminDb()
+  let query = db
     .collection('priceHistory')
     .where('stationId', '==', stationId)
     .orderBy('changedAt', 'desc')
@@ -48,7 +50,8 @@ export async function upsertConfirmedPrice(data: {
   const priceDocId = `${data.stationId}_${data.fuelType}`
   const nowIso = new Date().toISOString()
 
-  const existingSnap = await adminDb.collection('fuelPrices').doc(priceDocId).get()
+  const db = await getAdminDb()
+  const existingSnap = await db.collection('fuelPrices').doc(priceDocId).get()
   const existingPrice = existingSnap.exists
     ? (existingSnap.data() as FuelPrice).currentPrice
     : null
@@ -84,9 +87,9 @@ export async function upsertConfirmedPrice(data: {
         : 'baseline'
 
   await Promise.all([
-    adminDb.collection('fuelPrices').doc(priceDocId).set(priceData),
-    adminDb.collection('priceHistory').doc(historyId).set(historyData),
-    adminDb.collection('stations').doc(data.stationId).update({
+    db.collection('fuelPrices').doc(priceDocId).set(priceData),
+    db.collection('priceHistory').doc(historyId).set(historyData),
+    db.collection('stations').doc(data.stationId).update({
       [`latestPrices.${data.fuelType}`]: {
         price: data.price,
         sourceType: data.sourceType,
@@ -107,7 +110,8 @@ export async function getBaselinePrices(params: {
 }): Promise<PriceSnapshot[]> {
   const { fuelType, brand, limit = 50 } = params
 
-  let query = adminDb.collection('priceSnapshots').orderBy('scrapedAt', 'desc')
+  const db = await getAdminDb()
+  let query = db.collection('priceSnapshots').orderBy('scrapedAt', 'desc')
 
   if (fuelType) query = query.where('fuelType', '==', fuelType) as typeof query
   if (brand) query = query.where('brand', '==', brand) as typeof query

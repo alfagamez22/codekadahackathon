@@ -12,7 +12,7 @@ interface GoogleSignInButtonProps {
 }
 
 export function GoogleSignInButton({
-  redirectTo = '/dashboard',
+  redirectTo,
   label = 'Continue with Google',
 }: GoogleSignInButtonProps) {
   const router = useRouter()
@@ -23,8 +23,8 @@ export function GoogleSignInButton({
     setLoading(true)
     try {
       const user = await signInWithGoogle()
-      await syncServerSession(user)
-      router.replace(redirectTo)
+      const session = await syncServerSession(user)
+      router.replace(redirectTo ?? session.redirectTo)
       router.refresh()
     } catch {
       showToast('Google sign-in failed. Please try again.', 'error')

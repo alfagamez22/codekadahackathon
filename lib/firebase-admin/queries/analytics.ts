@@ -1,13 +1,14 @@
 import 'server-only'
-import { adminDb } from '../firestore'
+import { getAdminDb } from '../firestore'
 import type { FuelType } from '@/types/station'
 
 export async function getSystemStats() {
+  const db = await getAdminDb()
   const [stationSnap, reportSnap, userSnap, pricesSnap] = await Promise.all([
-    adminDb.collection('stations').count().get(),
-    adminDb.collection('priceHistory').count().get(),
-    adminDb.collection('users').count().get(),
-    adminDb.collection('fuelPrices').get(),
+    db.collection('stations').count().get(),
+    db.collection('priceHistory').count().get(),
+    db.collection('users').count().get(),
+    db.collection('fuelPrices').get(),
   ])
 
   const byFuelType = new Map<string, number[]>()
@@ -34,20 +35,24 @@ export async function getSystemStats() {
 }
 
 export async function getTopContributors(limit = 10) {
-  const snap = await adminDb
+  const db = await getAdminDb()
+  const snap = await db
     .collection('users')
     .orderBy('confirmedReportCount', 'desc')
-    .orderBy('trustScore', 'desc')
-    .limit(limit)
+    .limit(limit * 3)
     .get()
 
-  return snap.docs.map((d) => {
-    const u = d.data()
-    return {
-      uid: u.uid as string,
-      displayName: u.displayName as string | null,
-      confirmedReportCount: u.confirmedReportCount as number,
-      trustScore: u.trustScore as number,
-    }
-  })
+  return snap.docs
+    .map((d) => {
+      const u = d.data()
+      const uid = typeof u.uid === 'string' && u.uid.trim().length > 0 ? u.uid : d.id
+      return {
+        uid,
+        displayName: u.displayName as string | null,
+        confirmedReportCount: u.confirmedReportCount as number,
+        trustScore: u.trustScore as number,
+      }
+    })
+    .sort((a, b) => b.confirmedReportCount - a.confirmedReportCount || b.trustScore - a.trustScore)
+    .slice(0, limit)
 }
