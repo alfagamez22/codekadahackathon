@@ -14,6 +14,7 @@ export function RoutePlanner() {
   const [endAddress, setEndAddress] = useState('')
   const [route, setRoute] = useState<RouteInfo | null>(null)
   const [calculatingRoute, setCalculatingRoute] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const { geocodeAddress, calculateRoute, loading: geocodingLoading, error } = useRouteCalculation()
   const { location: userLocation } = useUserLocation()
@@ -22,6 +23,7 @@ export function RoutePlanner() {
     e.preventDefault()
 
     setCalculatingRoute(true)
+    setFormError(null)
     try {
       const useCurrentAsStart = startAddress === 'current'
       let startPoint: RoutePoint | null = null
@@ -37,23 +39,15 @@ export function RoutePlanner() {
       }
 
       if (!startPoint) {
-        alert('Please enter or select a valid starting point')
+        setFormError('Please enter or select a valid starting point.')
         return
       }
 
       const endPoint = await geocodeAddress(endAddress)
       if (!endPoint) {
-        alert('Please enter a valid destination')
+        setFormError('Please enter a valid destination.')
         return
       }
-
-      console.log('===== ROUTE DEBUG START =====')
-      console.log('START INPUT:', startAddress)
-      console.log('DESTINATION INPUT:', endAddress)
-      console.log('USE CURRENT AS START:', useCurrentAsStart)
-      console.log('START COORDS:', { lat: startPoint.lat, lng: startPoint.lng })
-      console.log('DESTINATION COORDS:', { lat: endPoint.lat, lng: endPoint.lng })
-      console.log('===== ROUTE DEBUG END =====')
 
       const calculatedRoute = await calculateRoute(startPoint, endPoint)
       if (calculatedRoute) {
@@ -100,7 +94,7 @@ export function RoutePlanner() {
             />
           </div>
 
-          {error && <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>}
+          {(formError || error) && <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{formError ?? error}</div>}
 
           <Button
             type="submit"

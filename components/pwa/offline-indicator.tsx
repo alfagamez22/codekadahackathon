@@ -1,21 +1,21 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useSyncExternalStore } from 'react'
+
+function subscribeToOnlineStatus(onStoreChange: () => void) {
+  window.addEventListener('online', onStoreChange)
+  window.addEventListener('offline', onStoreChange)
+  return () => {
+    window.removeEventListener('online', onStoreChange)
+    window.removeEventListener('offline', onStoreChange)
+  }
+}
+
+const getOnlineSnapshot = () => navigator.onLine
+const getServerOnlineSnapshot = () => true
 
 export function OfflineIndicator() {
-  const [isOnline, setIsOnline] = useState(true)
-
-  useEffect(() => {
-    setIsOnline(navigator.onLine)
-    const online = () => setIsOnline(true)
-    const offline = () => setIsOnline(false)
-    window.addEventListener('online', online)
-    window.addEventListener('offline', offline)
-    return () => {
-      window.removeEventListener('online', online)
-      window.removeEventListener('offline', offline)
-    }
-  }, [])
+  const isOnline = useSyncExternalStore(subscribeToOnlineStatus, getOnlineSnapshot, getServerOnlineSnapshot)
 
   if (isOnline) return null
 

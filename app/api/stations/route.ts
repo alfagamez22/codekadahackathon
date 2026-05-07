@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { searchStations } from '@/lib/db/queries/stations'
+import { searchStations } from '@/lib/firebase-admin/queries/stations'
 import type { FuelType } from '@/types/station'
 
 export async function GET(request: NextRequest) {

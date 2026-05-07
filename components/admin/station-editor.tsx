@@ -32,8 +32,11 @@ export function StationEditor({ stations }: StationEditorProps) {
           </tr>
         </thead>
         <tbody>
-          {stations.map((station) => (
-            <tr key={station.id} className="border-b border-border last:border-0">
+          {stations.map((station, i) => {
+            const rowId = station.id || `${station.name}-${station.city}-${i}`
+            const actionableId = station.id || null
+            return (
+            <tr key={rowId} className="border-b border-border last:border-0">
               <td className="py-3 font-medium">{station.name}</td>
               <td className="py-3 text-muted">{station.brand ?? '—'}</td>
               <td className="py-3">{station.city}</td>
@@ -42,14 +45,16 @@ export function StationEditor({ stations }: StationEditorProps) {
                 <Button
                   size="sm"
                   variant="danger"
-                  onClick={() => handleDelete(station.id)}
-                  loading={pending === station.id}
+                  onClick={() => actionableId && handleDelete(actionableId)}
+                  loading={actionableId !== null && pending === actionableId}
+                  disabled={actionableId === null}
                 >
                   Delete
                 </Button>
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>

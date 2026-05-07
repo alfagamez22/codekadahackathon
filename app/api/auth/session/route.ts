@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { setUserRole, verifyIdToken } from '@/lib/firebase-admin/auth'
 import { resolveUserRole } from '@/lib/auth/superadmin'
 import { setSessionCookie } from '@/lib/auth/session'
-import { upsertUser } from '@/lib/db/queries/users'
+import { upsertUser } from '@/lib/firebase-admin/queries/users'
+
+function roleToRedirect() {
+  return '/dashboard'
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,48 +34,19 @@ export async function POST(request: NextRequest) {
 
     await setSessionCookie(idToken)
 
-    const userData = {
+    // Mirror user to Firestore — non-blocking so DB unavailability doesn't break auth
+    upsertUser({
       id: decoded.uid,
       displayName: decoded.name ?? null,
       email: decoded.email ?? null,
       photoURL: decoded.picture ?? null,
       role: role === 'superadmin' ? 'admin' : role,
-    }
+    }).catch((err) => console.error('[session] upsertUser failed:', err))
 
-    // Attempt PostgreSQL Mirroring (Optional/Best Effort)
-    try {
-      await upsertUser(userData)
-      console.log('User upserted to PostgreSQL successfully')
-    } catch (dbError) {
-      console.warn('PostgreSQL upsert failed (DB might be offline), falling back to Firestore-only mirror:', dbError)
-      
-      // FALLBACK: Directly mirror to Firestore if SQL is down
-      try {
-        const { mirrorUserToFirestore } = await import('@/lib/firebase-admin/sql-mirror')
-        await mirrorUserToFirestore({
-          uid: userData.id,
-          displayName: userData.displayName,
-          email: userData.email,
-          photoURL: userData.photoURL,
-          role: userData.role as any,
-          trustScore: 0,
-          reportCount: 0,
-          confirmedReportCount: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-        console.log('User mirrored to Firestore directly (SQL fallback)')
-      } catch (mirrorError) {
-        console.error('Final fallback mirror to Firestore failed:', mirrorError)
-      }
-    }
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, role, redirectTo: roleToRedirect() })
   } catch (error) {
-    console.error('Session creation failed:', error)
-    return NextResponse.json({ 
-      error: 'Unauthorized',
-      details: error instanceof Error ? error.message : String(error)
-    }, { status: 401 })
+    console.error('[session] Session creation failed:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: 'Unauthorized', detail: message }, { status: 401 })
   }
 }

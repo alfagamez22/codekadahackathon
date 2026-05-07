@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import type * as Leaflet from 'leaflet'
 import type { RouteInfo } from '@/types/route'
 
 interface RouteMapProps {
@@ -37,7 +38,7 @@ function normalizeRouteCoordinates(coords: RouteCoordinates | unknown): Array<[n
 export function RouteMap({ route, loading }: RouteMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [mapReady, setMapReady] = useState(false)
-  const mapInstanceRef = useRef<unknown>(null)
+  const mapInstanceRef = useRef<Leaflet.Map | null>(null)
 
   useEffect(() => {
     if (!mapRef.current || !route) return
@@ -48,7 +49,7 @@ export function RouteMap({ route, loading }: RouteMapProps) {
       await import('leaflet/dist/leaflet.css')
 
       if (mapInstanceRef.current) {
-        (mapInstanceRef.current as any).remove()
+        mapInstanceRef.current.remove()
       }
 
       const centerLat = (activeRoute.startPoint.lat + activeRoute.endPoint.lat) / 2
@@ -113,13 +114,22 @@ export function RouteMap({ route, loading }: RouteMapProps) {
     }
 
     initMap()
+
+    return () => {
+      mapInstanceRef.current?.remove()
+      mapInstanceRef.current = null
+      setMapReady(false)
+    }
   }, [route])
 
   return (
-    <div
-      ref={mapRef}
-      className="w-full h-96 rounded-lg border border-border shadow-sm"
-      style={{ minHeight: '400px' }}
-    />
+    <div className="relative min-h-[400px] overflow-hidden rounded-lg border border-border shadow-sm">
+      <div ref={mapRef} className="h-96 w-full" />
+      {(loading || !mapReady) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-sm text-muted">
+          Loading route map...
+        </div>
+      )}
+    </div>
   )
 }

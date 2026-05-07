@@ -34,27 +34,26 @@ export async function getSystemConfig(): Promise<SystemConfig> {
 
 export const adminDb = new Proxy({} as any, {
   get(_, prop) {
-    // If they access .collection directly on the proxy
     if (prop === 'collection' || prop === 'doc') {
-      return (...args: any[]) => {
-        return getAdminDb().then(db => {
-          const target = (db as any)[prop];
-          const result = target.apply(db, args);
-          return result;
-        });
-      };
+      return (...args: any[]) =>
+        getAdminDb().then((db) => {
+          const target = (db as any)[prop]
+          return target.apply(db, args)
+        })
     }
 
-    const d = getAdminDb();
-    return (...args: any[]) => d.then(db => {
-      const target = (db as any)[prop];
-      if (typeof target === 'function') {
-        return target.apply(db, args)
-      }
-      return target
-    }).catch(err => {
-      console.error(`adminDb.${prop.toString()} failed:`, err);
-      throw err;
-    });
+    return (...args: any[]) =>
+      getAdminDb()
+        .then((db) => {
+          const target = (db as any)[prop]
+          if (typeof target === 'function') return target.apply(db, args)
+          return target
+        })
+        .catch((err) => {
+          console.error(`adminDb.${String(prop)} failed:`, err)
+          throw err
+        })
   },
 })
+
+export { getAdminDb }

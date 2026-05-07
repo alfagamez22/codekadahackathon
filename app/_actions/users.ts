@@ -1,28 +1,23 @@
 'use server'
 
 import { requireAuth, requireRole } from '@/lib/auth/guards'
-import { updateUserRole as dbUpdateUserRole } from '@/lib/db/queries/users'
 import { setUserRole } from '@/lib/firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
-import getAdminApp from '@/lib/firebase-admin'
-import { upsertUser } from '@/lib/db/queries/users'
+import { getAdminDb } from '@/lib/firebase-admin/firestore'
+import { updateUserRole as dbUpdateUserRole, upsertUser } from '@/lib/firebase-admin/queries/users'
 import type { UserRole } from '@/types/auth'
-
-async function getAdminDb() {
-  const app = await getAdminApp()
-  return getFirestore(app)
-}
 
 export async function updateProfileAction(data: {
   displayName?: string
   photoURL?: string
 }) {
   const session = await requireAuth()
+
   await upsertUser({
     id: session.uid,
     displayName: data.displayName,
     photoURL: data.photoURL,
   })
+
   return { success: true }
 }
 
