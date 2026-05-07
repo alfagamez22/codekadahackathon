@@ -9,6 +9,8 @@ interface RouteMapProps {
   route: RouteInfo | null
   loading?: boolean
   nearbyStations?: NearbyStation[]
+  alternateRoute?: RouteInfo | null
+  selectedStationId?: string | null
 }
 
 type RouteCoordinates = Array<[number, number]> | Array<Array<[number, number]>>
@@ -37,12 +39,13 @@ function normalizeRouteCoordinates(coords: RouteCoordinates | unknown): Array<[n
   return []
 }
 
-export function RouteMap({ route, loading, nearbyStations = [] }: RouteMapProps) {
+export function RouteMap({ route, loading, nearbyStations = [], alternateRoute, selectedStationId }: RouteMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [mapReady, setMapReady] = useState(false)
   const mapInstanceRef = useRef<Leaflet.Map | null>(null)
   const leafletRef = useRef<typeof Leaflet | null>(null)
   const stationLayerRef = useRef<Leaflet.LayerGroup | null>(null)
+  const alternateRouteLayerRef = useRef<Leaflet.Polyline | null>(null)
 
   useEffect(() => {
     if (!mapRef.current || !route) return
@@ -66,45 +69,93 @@ export function RouteMap({ route, loading, nearbyStations = [] }: RouteMapProps)
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map)
 
-      // Start marker
+      // Start marker (Google Maps style Blue Dot)
       const startIcon = L.divIcon({
-        html: '<div style="background:#10b981;color:white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.3)">A</div>',
+        html: `
+          <div style="position:relative;width:24px;height:24px;">
+            <div style="position:absolute;top:0;left:0;width:24px;height:24px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(59,130,246,0.5);"></div>
+            <div style="position:absolute;top:6px;left:6px;width:12px;height:12px;background:white;border-radius:50%;"></div>
+            <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#3b82f6;color:white;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:bold;white-space:nowrap;">Start (A)</div>
+          </div>
+        `,
         className: '',
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
       })
+
+      // FOV Radius circle around start
+      L.circle([activeRoute.startPoint.lat, activeRoute.startPoint.lng], {
+        radius: 300,
+        color: '#3b82f6',
+        fillColor: '#3b82f6',
+        fillOpacity: 0.1,
+        weight: 1,
+        dashArray: '5, 5'
+      }).addTo(map)
 
       L.marker([activeRoute.startPoint.lat, activeRoute.startPoint.lng], { icon: startIcon })
         .addTo(map)
         .bindPopup(`Start: ${activeRoute.startPoint.address}`)
 
-      // End marker
+      // End marker (Google Maps style Red Pin)
       const endIcon = L.divIcon({
-        html: '<div style="background:#ef4444;color:white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.3)">B</div>',
+        html: `
+          <div style="position:relative;width:24px;height:24px;">
+            <div style="position:absolute;top:0;left:0;width:24px;height:24px;background:#ef4444;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(239,68,68,0.5);"></div>
+            <div style="position:absolute;top:6px;left:6px;width:12px;height:12px;background:white;border-radius:50%;"></div>
+            <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#ef4444;color:white;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:bold;white-space:nowrap;">End (B)</div>
+          </div>
+        `,
         className: '',
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
       })
 
       L.marker([activeRoute.endPoint.lat, activeRoute.endPoint.lng], { icon: endIcon })
         .addTo(map)
         .bindPopup(`Destination: ${activeRoute.endPoint.address}`)
 
-      // Route polyline
+      // Route Drawing Logic
       const routeCoords = normalizeRouteCoordinates(activeRoute.coordinates)
       const coordinates = routeCoords.map((coord) => [coord[1], coord[0]] as [number, number])
+      
       if (coordinates.length >= 2) {
+        // If a station is selected and it's NOT a detour, the main route turns blue.
+        // If it IS a detour, the main route stays green and the alternate is blue.
+        const isAlongTheWay = selectedStationId && !alternateRoute;
+        
         L.polyline(coordinates, {
-          color: '#16a34a',
-          weight: 3,
-          opacity: 0.7,
+          color: isAlongTheWay ? '#3b82f6' : '#16a34a',
+          weight: 6,
+          opacity: isAlongTheWay ? 0.9 : 0.8,
           smoothFactor: 1.0,
         }).addTo(map)
       }
 
+      // Alternate Route polyline (Blue Detour)
+      if (alternateRoute) {
+        const altCoords = normalizeRouteCoordinates(alternateRoute.coordinates)
+        const altCoordinates = altCoords.map((coord) => [coord[1], coord[0]] as [number, number])
+        if (altCoordinates.length >= 2) {
+          alternateRouteLayerRef.current = L.polyline(altCoordinates, {
+            color: '#3b82f6',
+            weight: 6,
+            opacity: 0.8,
+            dashArray: '10, 10',
+            smoothFactor: 1.0,
+          }).addTo(map)
+        }
+      }
+
       // Fit bounds
-      if (coordinates.length >= 2) {
-        const bounds = L.latLngBounds(coordinates)
+      const allCoords = [...coordinates]
+      if (alternateRoute) {
+        const altCoords = normalizeRouteCoordinates(alternateRoute.coordinates)
+        allCoords.push(...altCoords.map((coord) => [coord[1], coord[0]] as [number, number]))
+      }
+
+      if (allCoords.length >= 2) {
+        const bounds = L.latLngBounds(allCoords)
         map.fitBounds(bounds, { padding: [50, 50] })
       } else {
         const fallbackBounds = L.latLngBounds([
@@ -127,10 +178,11 @@ export function RouteMap({ route, loading, nearbyStations = [] }: RouteMapProps)
       mapInstanceRef.current?.remove()
       mapInstanceRef.current = null
       stationLayerRef.current = null
+      alternateRouteLayerRef.current = null
       leafletRef.current = null
       setMapReady(false)
     }
-  }, [route])
+  }, [route, alternateRoute, selectedStationId])
 
   useEffect(() => {
     const L = leafletRef.current as typeof import('leaflet') | null
@@ -188,7 +240,7 @@ export function RouteMap({ route, loading, nearbyStations = [] }: RouteMapProps)
         .addTo(layer)
         .bindPopup(popupContent)
     }
-  }, [nearbyStations, mapReady])
+  }, [nearbyStations, mapReady, selectedStationId])
 
   return (
     <div className="relative min-h-[400px] overflow-hidden rounded-lg border border-border shadow-sm">

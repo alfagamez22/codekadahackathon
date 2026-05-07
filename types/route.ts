@@ -2,6 +2,7 @@ export interface RoutePoint {
   lat: number
   lng: number
   address: string
+  name?: string
 }
 
 export interface RouteInfo {
