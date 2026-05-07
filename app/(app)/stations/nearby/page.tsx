@@ -25,6 +25,16 @@ type GaswatchStation = {
 
 type GaswatchStationWithDistance = GaswatchStation & { distanceKm?: number }
 type Coordinates = { lat: number; lng: number }
+type TravelMode = 'ROUNDABOUT' | 'ONE_WAY' | 'TURNOVER'
+type StopInsertionMode = 'AUTO' | 'OUTBOUND_STOP' | 'INBOUND_STOP'
+type FuelConsumptionUnit = 'km/L' | 'L/100km' | 'L/km'
+type GaswatchBrandMeta = {
+  name?: string
+  short?: string
+  color?: string
+  textColor?: string
+}
+
 type VehicleProfile = {
   brand: string
   model: string
@@ -34,7 +44,6 @@ type VehicleProfile = {
   transmission: string
   fuelType: string
 }
-type RouteBehavior = 0 | 1 | 2
 
 type StationDecision = {
   id: string
@@ -46,6 +55,12 @@ type StationDecision = {
   objectiveCost: number
   travelFuelCost: number
   timeCost: number
+  deltaD: number
+  deltaT: number
+  netSavings: number
+  feasible: boolean
+  infeasibleReason?: string
+  stopMode?: Exclude<StopInsertionMode, 'AUTO'>
 }
 
 const GASWATCH_RADIUS_KM = 5
@@ -54,10 +69,18 @@ const DEFAULT_PROVINCE = 'NCR'
 const PRICE_ORDER = ['diesel', 'premiumDiesel', 'unleaded', 'egasoline', 'premium95', 'premium97', 'kerosene']
 const TRINOMA_COORDS: Coordinates = { lat: 14.6528, lng: 121.0329 }
 const TRINOMA_LABEL = 'Trinoma, Quezon City'
+const MAKATI_COORDS: Coordinates = { lat: 14.5547, lng: 121.0244 }
+const MAKATI_LABEL = 'Makati CBD'
 const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY ?? ''
 const DEFAULT_TARGET_FUEL_LITERS = 40
-const DEFAULT_FUEL_CONSUMPTION_L_PER_KM = 0.1
+const DEFAULT_FUEL_CONSUMPTION_VALUE = 8 // km/L
+const DEFAULT_FUEL_CONSUMPTION_UNIT: FuelConsumptionUnit = 'km/L'
 const DEFAULT_TIME_VALUE_PHP_PER_MIN = 2
+const DEFAULT_CURRENT_FUEL_LITERS = 12
+const DEFAULT_RESERVE_FUEL_LITERS = 2
+const DEFAULT_TANK_CAPACITY_LITERS = 45
+const ROUTE_CORRIDOR_KM = 2
+const ESTIMATED_SPEED_KPH = 30
 
 const VEHICLE_MODELS: Record<string, Record<string, string[]>> = {
   Toyota: {
@@ -115,6 +138,45 @@ const getDistanceKm = (from: { lat: number; lng: number }, to: { lat: number; ln
   return earthRadiusKm * c
 }
 
+const estimateMinutesForDistance = (distanceKm: number) => {
+  if (distanceKm <= 0) return 0
+  return Math.max(1, Math.round((distanceKm / ESTIMATED_SPEED_KPH) * 60))
+}
+
+const projectToPlane = (coords: Coordinates) => {
+  const x = coords.lng * 111.32 * Math.cos(toRadians(coords.lat))
+  const y = coords.lat * 110.574
+  return { x, y }
+}
+
+const distancePointToSegmentKm = (point: Coordinates, start: Coordinates, end: Coordinates) => {
+  const p = projectToPlane(point)
+  const a = projectToPlane(start)
+  const b = projectToPlane(end)
+
+  const abx = b.x - a.x
+  const aby = b.y - a.y
+  const apx = p.x - a.x
+  const apy = p.y - a.y
+  const abLengthSquared = abx * abx + aby * aby
+  if (abLengthSquared === 0) return Math.hypot(apx, apy)
+
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLengthSquared))
+  const closestX = a.x + t * abx
+  const closestY = a.y + t * aby
+  return Math.hypot(p.x - closestX, p.y - closestY)
+}
+
+const normalizeFuelConsumption = (value: number, unit: FuelConsumptionUnit): number => {
+  if (value <= 0) return 0.1
+  switch (unit) {
+    case 'km/L': return 1 / value
+    case 'L/100km': return value / 100
+    case 'L/km': return value
+    default: return value
+  }
+}
+
 const getLowestPrice = (prices: GaswatchPriceMap) => {
   const values = Object.values(prices).filter((value): value is number => typeof value === 'number')
   return values.length > 0 ? Math.min(...values) : null
@@ -159,9 +221,16 @@ export default function NearbyPage() {
   const [etaLoading, setEtaLoading] = useState(false)
   const [showUserMarker, setShowUserMarker] = useState(true)
   const [targetFuelLiters, setTargetFuelLiters] = useState(DEFAULT_TARGET_FUEL_LITERS)
-  const [fuelConsumptionLPerKm, setFuelConsumptionLPerKm] = useState(DEFAULT_FUEL_CONSUMPTION_L_PER_KM)
+  const [fuelConsumptionValue, setFuelConsumptionValue] = useState(DEFAULT_FUEL_CONSUMPTION_VALUE)
+  const [fuelConsumptionUnit, setFuelConsumptionUnit] = useState<FuelConsumptionUnit>(DEFAULT_FUEL_CONSUMPTION_UNIT)
   const [timeValuePhpPerMin, setTimeValuePhpPerMin] = useState(DEFAULT_TIME_VALUE_PHP_PER_MIN)
-  const [routeBehavior, setRouteBehavior] = useState<RouteBehavior>(1)
+  const [travelMode, setTravelMode] = useState<TravelMode>('ROUNDABOUT')
+  const [stopInsertionMode, setStopInsertionMode] = useState<StopInsertionMode>('AUTO')
+  const [destinationCoords, setDestinationCoords] = useState<Coordinates | null>(MAKATI_COORDS)
+  const [homeCoords, setHomeCoords] = useState<Coordinates | null>(null)
+  const [currentFuelLiters, setCurrentFuelLiters] = useState(DEFAULT_CURRENT_FUEL_LITERS)
+  const [reserveFuelLiters, setReserveFuelLiters] = useState(DEFAULT_RESERVE_FUEL_LITERS)
+  const [tankCapacityLiters, setTankCapacityLiters] = useState(DEFAULT_TANK_CAPACITY_LITERS)
   const [selectedFuelType, setSelectedFuelType] = useState<string>('diesel')
   const [vehicleProfile, setVehicleProfile] = useState<VehicleProfile | null>(null)
   const [isCarModalOpen, setIsCarModalOpen] = useState(false)
@@ -184,7 +253,7 @@ export default function NearbyPage() {
       if (!res.ok) {
         throw new Error('Failed to load GasWatchPH stations.')
       }
-      return res.json() as Promise<{ stations: GaswatchStation[] }>
+      return res.json() as Promise<{ stations: GaswatchStation[]; brands?: Record<string, GaswatchBrandMeta> }>
     },
   })
 
@@ -233,6 +302,7 @@ export default function NearbyPage() {
   }, [])
 
   const gaswatchStations = useMemo(() => gaswatchData?.stations ?? [], [gaswatchData?.stations])
+  const gaswatchBrands = useMemo(() => gaswatchData?.brands ?? {}, [gaswatchData?.brands])
   const activeCoords = locationMode === 'demo' ? TRINOMA_COORDS : coords
   const hasActiveCoords = activeCoords != null
   const stationsWithDistance = useMemo<GaswatchStationWithDistance[]>(() => {
@@ -422,14 +492,37 @@ export default function NearbyPage() {
   )
 
   const modeledStations = useMemo<StationDecision[]>(() => {
-    const entries = displayedStations
+    const consumptionLPerKm = normalizeFuelConsumption(fuelConsumptionValue, fuelConsumptionUnit)
+    const originCoords = activeCoords ?? TRINOMA_COORDS
+    const destination = destinationCoords
+    const home = homeCoords ?? originCoords
+
+    const scenarioCandidates = gaswatchStations.filter((station) => {
+      const stationCoords = { lat: station.lat, lng: station.lng }
+      const toOrigin = getDistanceKm(originCoords, stationCoords)
+
+      if (travelMode === 'ROUNDABOUT') {
+        return toOrigin <= GASWATCH_RADIUS_KM
+      }
+
+      if (!destination) return false
+      if (travelMode === 'ONE_WAY') {
+        return distancePointToSegmentKm(stationCoords, originCoords, destination) <= ROUTE_CORRIDOR_KM
+      }
+
+      const onOutbound = distancePointToSegmentKm(stationCoords, originCoords, destination) <= ROUTE_CORRIDOR_KM
+      const onInbound = distancePointToSegmentKm(stationCoords, destination, home) <= ROUTE_CORRIDOR_KM
+      return onOutbound || onInbound
+    })
+
+    const entries = scenarioCandidates
       .map((station) => {
         const stationId = String(station.id)
         const stationPrice = station.prices[selectedFuelType]
         if (typeof stationPrice !== 'number') return null
 
-        const distanceKm = station.distanceKm ?? getDistanceKm(activeCoords ?? TRINOMA_COORDS, { lat: station.lat, lng: station.lng })
-        const etaMinutes = etaByStationId[stationId] ?? Math.max(1, Math.round((distanceKm / 30) * 60))
+        const distanceKm = getDistanceKm(originCoords, { lat: station.lat, lng: station.lng })
+        const etaMinutes = etaByStationId[stationId] ?? estimateMinutesForDistance(distanceKm)
 
         return {
           id: stationId,
@@ -438,33 +531,130 @@ export default function NearbyPage() {
           distanceKm,
           etaMinutes,
           stationPrice,
+          coords: { lat: station.lat, lng: station.lng }
         }
       })
       .filter((entry): entry is NonNullable<typeof entry> => entry != null)
 
     if (entries.length === 0) return []
 
-    const pCurrent = entries.reduce((sum, entry) => sum + entry.stationPrice, 0) / entries.length
+    const pRef = entries.reduce((sum, entry) => sum + entry.stationPrice, 0) / entries.length
 
     const scored = entries.map((entry) => {
-      const travelFuelCost = fuelConsumptionLPerKm * (entry.distanceKm * routeBehavior) * pCurrent
-      const timeCost = entry.etaMinutes * routeBehavior * timeValuePhpPerMin
-      const objectiveCost = targetFuelLiters * entry.stationPrice + travelFuelCost + timeCost
+      let deltaD = 0
+      let deltaT = 0
+
+      const litersNeededToStation = entry.distanceKm * consumptionLPerKm
+      const usableFuelBeforeStop = Math.max(0, currentFuelLiters - reserveFuelLiters)
+      let feasible = litersNeededToStation <= usableFuelBeforeStop
+      let infeasibleReason: string | undefined
+      let chosenStopMode: Exclude<StopInsertionMode, 'AUTO'> | undefined
+      if (!feasible) {
+        infeasibleReason = 'Insufficient pre-refuel fuel to safely reach this station.'
+      }
+
+      if (targetFuelLiters > tankCapacityLiters) {
+        feasible = false
+        infeasibleReason = 'Requested fill exceeds configured tank capacity.'
+      }
+
+      if (travelMode === 'ROUNDABOUT') {
+        deltaD = entry.distanceKm * 2
+        deltaT = entry.etaMinutes * 2
+      } else if (travelMode === 'ONE_WAY' && destination) {
+        const distDirect = getDistanceKm(originCoords, destination)
+        const distToStation = entry.distanceKm
+        const distStationToDest = getDistanceKm(entry.coords, destination)
+        deltaD = Math.max(0, (distToStation + distStationToDest) - distDirect)
+
+        const etaDirect = estimateMinutesForDistance(distDirect)
+        const etaToStation = entry.etaMinutes
+        const etaStationToDest = estimateMinutesForDistance(distStationToDest)
+        deltaT = Math.max(0, (etaToStation + etaStationToDest) - etaDirect)
+      } else if (travelMode === 'TURNOVER' && destination) {
+        const directOutbound = getDistanceKm(originCoords, destination)
+        const directInbound = getDistanceKm(destination, home)
+        const baseDistance = directOutbound + directInbound
+        const baseEta = estimateMinutesForDistance(directOutbound) + estimateMinutesForDistance(directInbound)
+
+        const outboundDistanceWithStop =
+          getDistanceKm(originCoords, entry.coords) +
+          getDistanceKm(entry.coords, destination) +
+          directInbound
+        const inboundDistanceWithStop =
+          directOutbound +
+          getDistanceKm(destination, entry.coords) +
+          getDistanceKm(entry.coords, home)
+
+        const outboundDeltaD = Math.max(0, outboundDistanceWithStop - baseDistance)
+        const inboundDeltaD = Math.max(0, inboundDistanceWithStop - baseDistance)
+
+        const outboundEta =
+          entry.etaMinutes +
+          estimateMinutesForDistance(getDistanceKm(entry.coords, destination)) +
+          estimateMinutesForDistance(directInbound)
+        const inboundEta =
+          estimateMinutesForDistance(directOutbound) +
+          estimateMinutesForDistance(getDistanceKm(destination, entry.coords)) +
+          estimateMinutesForDistance(getDistanceKm(entry.coords, home))
+
+        const outboundDeltaT = Math.max(0, outboundEta - baseEta)
+        const inboundDeltaT = Math.max(0, inboundEta - baseEta)
+
+        const useOutbound = stopInsertionMode === 'OUTBOUND_STOP' || (stopInsertionMode === 'AUTO' && outboundDeltaD <= inboundDeltaD)
+        chosenStopMode = useOutbound ? 'OUTBOUND_STOP' : 'INBOUND_STOP'
+        deltaD = useOutbound ? outboundDeltaD : inboundDeltaD
+        deltaT = useOutbound ? outboundDeltaT : inboundDeltaT
+      }
+
+      const postRefuelTripKm = travelMode === 'ROUNDABOUT'
+        ? entry.distanceKm
+        : travelMode === 'ONE_WAY' && destination
+          ? getDistanceKm(entry.coords, destination)
+          : travelMode === 'TURNOVER' && destination
+            ? (chosenStopMode === 'INBOUND_STOP'
+              ? getDistanceKm(entry.coords, home)
+              : getDistanceKm(entry.coords, destination) + getDistanceKm(destination, home))
+            : 0
+
+      const postRefuelRequiredLiters = postRefuelTripKm * consumptionLPerKm + reserveFuelLiters
+      if (postRefuelRequiredLiters > targetFuelLiters && feasible) {
+        feasible = false
+        infeasibleReason = 'Target fill may be insufficient for the remaining trip plus reserve.'
+      }
+
+      const travelFuelCost = deltaD * consumptionLPerKm * pRef
+      const timeCost = deltaT * timeValuePhpPerMin
+      const gasCost = targetFuelLiters * entry.stationPrice
+      const objectiveCost = gasCost + travelFuelCost + timeCost
+
+      const grossSavings = targetFuelLiters * (pRef - entry.stationPrice)
+      const netSavings = grossSavings - travelFuelCost - timeCost
 
       return {
         ...entry,
         objectiveCost,
         travelFuelCost,
         timeCost,
+        deltaD,
+        deltaT,
+        netSavings,
+        feasible,
+        infeasibleReason,
+        stopMode: chosenStopMode,
       }
     })
 
-    return scored.sort((a, b) => a.objectiveCost - b.objectiveCost)
-  }, [activeCoords, displayedStations, etaByStationId, fuelConsumptionLPerKm, routeBehavior, selectedFuelType, targetFuelLiters, timeValuePhpPerMin])
+    return scored.sort((a, b) => {
+      if (a.feasible !== b.feasible) return a.feasible ? -1 : 1
+      return a.objectiveCost - b.objectiveCost
+    })
+  }, [activeCoords, currentFuelLiters, destinationCoords, etaByStationId, fuelConsumptionUnit, fuelConsumptionValue, gaswatchStations, homeCoords, reserveFuelLiters, selectedFuelType, stopInsertionMode, tankCapacityLiters, targetFuelLiters, timeValuePhpPerMin, travelMode])
 
-  const bestStation = modeledStations[0] ?? null
-  const nextBestStation = modeledStations[1] ?? null
-  const netSavings = bestStation && nextBestStation ? nextBestStation.objectiveCost - bestStation.objectiveCost : null
+  const feasibleStations = modeledStations.filter((station) => station.feasible)
+  const bestStation = feasibleStations[0] ?? null
+  const nextBestStation = feasibleStations[1] ?? null
+  const savingsVsNext = bestStation && nextBestStation ? nextBestStation.objectiveCost - bestStation.objectiveCost : null
   const highlightedStationId = bestStation ? `gaswatch-${bestStation.id}` : null
 
   return (
@@ -616,6 +806,7 @@ export default function NearbyPage() {
             <div className="relative">
               <StationMap
                 stations={mapStations}
+                brandStyles={gaswatchBrands}
                 userLat={activeCoords?.lat}
                 userLng={activeCoords?.lng}
                 userHeading={locationMode === 'device' ? heading : null}
@@ -737,11 +928,87 @@ export default function NearbyPage() {
 
           <div className="mt-4 rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
             <div><span className="font-medium text-foreground">Location:</span> {locationLabel}</div>
-            <div><span className="font-medium text-foreground">Stations in 5km:</span> {displayedStations.length}</div>
+            <div><span className="font-medium text-foreground">Candidates:</span> {modeledStations.length} {travelMode === 'ROUNDABOUT' ? '(within 5km)' : '(route corridor)'}</div>
             <div><span className="font-medium text-foreground">Vehicle:</span> {vehicleProfile ? 'Set' : 'Not set'}</div>
           </div>
 
           <div className="mt-4 grid gap-3 rounded-lg border border-border bg-background p-3 text-xs">
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Travel Purpose
+              <select
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={travelMode}
+                onChange={(event) => setTravelMode(event.target.value as TravelMode)}
+              >
+                <option value="ROUNDABOUT">Refuel and return home</option>
+                <option value="ONE_WAY">Refuel on the way to destination</option>
+                <option value="TURNOVER">Refuel for destination & return home</option>
+              </select>
+            </label>
+
+            {travelMode !== 'ROUNDABOUT' && (
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Destination (Mock Coords)
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                    value={destinationCoords?.lat ?? ''}
+                    onChange={(e) => setDestinationCoords(prev => prev ? ({ ...prev, lat: Number(e.target.value) }) : { lat: Number(e.target.value), lng: 121.0244 })}
+                    placeholder="Lat"
+                  />
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                    value={destinationCoords?.lng ?? ''}
+                    onChange={(e) => setDestinationCoords(prev => prev ? ({ ...prev, lng: Number(e.target.value) }) : { lat: 14.5547, lng: Number(e.target.value) })}
+                    placeholder="Lng"
+                  />
+                </div>
+              </label>
+            )}
+
+            {travelMode === 'TURNOVER' && (
+              <>
+                <label className="flex flex-col gap-1 text-muted-foreground">
+                  Turnover stop insertion
+                  <select
+                    className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                    value={stopInsertionMode}
+                    onChange={(event) => setStopInsertionMode(event.target.value as StopInsertionMode)}
+                  >
+                    <option value="AUTO">Auto (least detour)</option>
+                    <option value="OUTBOUND_STOP">Outbound stop</option>
+                    <option value="INBOUND_STOP">Inbound stop</option>
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1 text-muted-foreground">
+                  Home return point (optional)
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                      value={homeCoords?.lat ?? ''}
+                      onChange={(e) => setHomeCoords(prev => prev ? ({ ...prev, lat: Number(e.target.value) }) : { lat: Number(e.target.value), lng: activeCoords?.lng ?? 121.0329 })}
+                      placeholder="Home lat"
+                    />
+                    <input
+                      type="number"
+                      step="0.0001"
+                      className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                      value={homeCoords?.lng ?? ''}
+                      onChange={(e) => setHomeCoords(prev => prev ? ({ ...prev, lng: Number(e.target.value) }) : { lat: activeCoords?.lat ?? 14.6528, lng: Number(e.target.value) })}
+                      placeholder="Home lng"
+                    />
+                  </div>
+                </label>
+              </>
+            )}
+
             <label className="flex flex-col gap-1 text-muted-foreground">
               Fuel type
               <select
@@ -769,17 +1036,31 @@ export default function NearbyPage() {
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-muted-foreground">
-              C (L/km fuel consumption)
-              <input
-                type="number"
-                min="0.02"
-                step="0.01"
-                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
-                value={fuelConsumptionLPerKm}
-                onChange={(event) => setFuelConsumptionLPerKm(Number(event.target.value) || DEFAULT_FUEL_CONSUMPTION_L_PER_KM)}
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Fuel Consumption
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.1"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={fuelConsumptionValue}
+                  onChange={(event) => setFuelConsumptionValue(Number(event.target.value) || DEFAULT_FUEL_CONSUMPTION_VALUE)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Unit
+                <select
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={fuelConsumptionUnit}
+                  onChange={(event) => setFuelConsumptionUnit(event.target.value as FuelConsumptionUnit)}
+                >
+                  <option value="km/L">km/L</option>
+                  <option value="L/100km">L/100km</option>
+                  <option value="L/km">L/km</option>
+                </select>
+              </label>
+            </div>
 
             <label className="flex flex-col gap-1 text-muted-foreground">
               Vt (PHP/min time value)
@@ -793,44 +1074,81 @@ export default function NearbyPage() {
               />
             </label>
 
-            <label className="flex flex-col gap-1 text-muted-foreground">
-              Route behavior coefficient (R)
-              <select
-                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
-                value={routeBehavior}
-                onChange={(event) => setRouteBehavior(Number(event.target.value) as RouteBehavior)}
-              >
-                <option value={0}>0 - Pass-through</option>
-                <option value={1}>1 - Detour / return to route</option>
-                <option value={2}>2 - Dedicated round trip</option>
-              </select>
-            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Current fuel (L)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={currentFuelLiters}
+                  onChange={(event) => setCurrentFuelLiters(Number(event.target.value) || DEFAULT_CURRENT_FUEL_LITERS)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Reserve (L)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={reserveFuelLiters}
+                  onChange={(event) => setReserveFuelLiters(Number(event.target.value) || DEFAULT_RESERVE_FUEL_LITERS)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Tank cap (L)
+                <input
+                  type="number"
+                  min="10"
+                  step="1"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={tankCapacityLiters}
+                  onChange={(event) => setTankCapacityLiters(Number(event.target.value) || DEFAULT_TANK_CAPACITY_LITERS)}
+                />
+              </label>
+            </div>
           </div>
 
           <div className="mt-3 rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
-            <div className="font-medium text-foreground">Objective function</div>
-            <div className="mt-1">J_i = (F * P_i) + (D_i * R * C * P_curr) + (T_i * R * V_t)</div>
+            <div className="font-medium text-foreground">Dynamic Objective function</div>
+            <div className="mt-1 font-mono text-[10px]">J_i = (F * P_i) + (ΔD_i * C * P_ref) + (ΔT_i * V_t)</div>
+            <div className="mt-1 text-[10px]">ΔD: Marginal dist | ΔT: Marginal time</div>
           </div>
 
           <div className="mt-3 max-h-[40vh] overflow-y-auto rounded-lg border border-border bg-background p-3 text-xs">
             {bestStation ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-fuel-green/30 bg-fuel-green/10 p-3">
-                  <div className="font-semibold text-foreground">Best for the buck: {bestStation.name}</div>
+                  <div className="font-semibold text-foreground">Recommended: {bestStation.name}</div>
                   <div className="text-muted-foreground">
-                    J* = PHP {bestStation.objectiveCost.toFixed(2)} | ETA {bestStation.etaMinutes} min | {bestStation.distanceKm.toFixed(2)} km
+                    J* = PHP {bestStation.objectiveCost.toFixed(2)} | ΔT {bestStation.deltaT} min | ΔD {bestStation.deltaD.toFixed(2)} km
                   </div>
-                  {netSavings != null && (
-                    <div className="mt-1 text-fuel-green font-medium">Estimated advantage vs next option: PHP {netSavings.toFixed(2)}</div>
+                  {bestStation.stopMode && (
+                    <div className="mt-1 text-muted-foreground">Turnover insertion: {bestStation.stopMode === 'OUTBOUND_STOP' ? 'Outbound' : 'Inbound'}</div>
+                  )}
+                  {savingsVsNext != null && savingsVsNext > 0 && (
+                    <div className="mt-1 text-fuel-green font-medium">Net Savings vs next option: PHP {savingsVsNext.toFixed(2)}</div>
+                  )}
+                  {bestStation.netSavings < 0 && (
+                    <div className="mt-1 text-fuel-red font-medium">Note: Refuel cost outweighs detour savings.</div>
                   )}
                 </div>
 
-                {modeledStations.slice(0, 5).map((decision, index) => (
+                {feasibleStations.slice(0, 5).map((decision, index) => (
                   <div key={decision.id} className="rounded-lg border border-border p-2">
                     <div className="font-medium text-foreground">#{index + 1} {decision.name}</div>
                     <div className="text-muted-foreground">
-                      J_i PHP {decision.objectiveCost.toFixed(2)} = fuel PHP {(targetFuelLiters * decision.stationPrice).toFixed(2)} + travel PHP {decision.travelFuelCost.toFixed(2)} + time PHP {decision.timeCost.toFixed(2)}
+                      J_i PHP {decision.objectiveCost.toFixed(2)} = fuel PHP {(targetFuelLiters * decision.stationPrice).toFixed(2)} + detour PHP {decision.travelFuelCost.toFixed(2)} + time PHP {decision.timeCost.toFixed(2)}
                     </div>
+                  </div>
+                ))}
+
+                {modeledStations.filter((entry) => !entry.feasible).slice(0, 3).map((entry) => (
+                  <div key={`infeasible-${entry.id}`} className="rounded-lg border border-fuel-red/30 bg-fuel-red-light p-2 text-fuel-red">
+                    <div className="font-medium">{entry.name} excluded</div>
+                    <div>{entry.infeasibleReason ?? 'This station is currently not feasible for your fuel constraints.'}</div>
                   </div>
                 ))}
               </div>
@@ -847,9 +1165,6 @@ export default function NearbyPage() {
             {etaLoading && (
               <div className="text-muted-foreground">Refreshing ETA and objective score...</div>
             )}
-            <div className="text-[11px] text-muted-foreground">
-              R modes: 0 pass-through, 1 detour, 2 dedicated trip.
-            </div>
           </div>
         </aside>
       </div>
