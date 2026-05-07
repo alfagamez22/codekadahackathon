@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Children, type ReactNode } from 'react'
 
 interface CardProps {
   children: ReactNode
@@ -18,13 +18,13 @@ export function Card({ children, className = '', padding = 'md' }: CardProps) {
     <div
       className={`rounded-xl border border-border bg-card shadow-sm ${paddings[padding]} ${className}`}
     >
-      {children}
+      {Children.toArray(children)}
     </div>
   )
 }
 
 export function CardHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`mb-4 ${className}`}>{children}</div>
+  return <div className={`mb-4 ${className}`}>{Children.toArray(children)}</div>
 }
 
 export function CardTitle({ children, className = '' }: { children: ReactNode; className?: string }) {

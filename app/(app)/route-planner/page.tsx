@@ -1,4 +1,4 @@
-import { RoutePlannerDev } from '@/components/route/route-planner-dev'
+import { RoutePlanner } from '@/components/route/route-planner'
 import { PageHeader } from '@/components/layout/page-header'
 import type { Metadata } from 'next'
 
@@ -11,7 +11,7 @@ export default function RoutePlannerPage() {
         title="Route Planner"
         description="Plan your route and find fuel stations along the way."
       />
-      <RoutePlannerDev />
+      <RoutePlanner />
     </div>
   )
 }

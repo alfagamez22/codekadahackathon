@@ -1,7 +1,6 @@
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { GoogleSignInButton } from '@/components/auth/google-sign-in-button'
 
 const features = [
   { icon: '📍', title: 'Locate Stations', description: 'Find gas stations near you with GPS or browse by province and city.' },
@@ -24,9 +23,7 @@ export default function LandingPage() {
             Gas Price Tracker PH is the community-powered app for finding and comparing fuel prices
             across the Philippines — live, accurate, and verified by real people.
           </p>
-          <Link href="/login">
-            <Button size="lg">Continue with Google</Button>
-          </Link>
+          <GoogleSignInButton variant="primary" size="lg" className="mx-auto" />
         </div>
       </section>
 
@@ -67,9 +64,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-xl">
           <h2 className="text-2xl font-bold mb-3">Ready to save on fuel?</h2>
           <p className="mb-6 opacity-90">Join thousands of Filipinos who track fuel prices together.</p>
-          <Link href="/login">
-            <Button variant="secondary" size="lg">Continue with Google</Button>
-          </Link>
+          <GoogleSignInButton size="lg" className="mx-auto bg-white" />
         </div>
       </section>
     </div>

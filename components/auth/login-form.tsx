@@ -31,8 +31,8 @@ export function LoginForm() {
     setLoading(true)
     try {
       const user = await signInWithEmail(data.email, data.password)
-      await syncServerSession(user)
-      router.replace('/dashboard')
+      const session = await syncServerSession(user)
+      router.replace(session.redirectTo)
       router.refresh()
     } catch {
       showToast('Invalid email or password', 'error')

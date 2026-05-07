@@ -1,9 +1,8 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { readSession } from '@/lib/auth/session'
 import { SignOutButton } from '@/components/auth/sign-out-button'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { GoogleSignInButton } from '@/components/auth/google-sign-in-button'
 import type { UserRole } from '@/types/auth'
 
 export async function Header() {
@@ -23,11 +22,11 @@ export async function Header() {
             <nav className="hidden md:flex items-center gap-1">
               <Link href="/dashboard" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Dashboard</Link>
               <Link href="/stations/nearby" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Nearby</Link>
-              <Link href="/route-planner" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Route</Link>
+              <Link href="/route-planner" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Routes</Link>
               <Link href="/validate" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">Validate</Link>
-              {(session.role === 'superadmin' || session.role === 'admin' || session.role === 'moderator') && (
-                <Link href={session.role === 'superadmin' ? '/superadmin' : session.role === 'admin' ? '/admin' : '/moderator'} className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">
-                  {session.role === 'superadmin' ? 'Superadmin' : session.role === 'admin' ? 'Admin' : 'Review'}
+              {(session.role === 'superadmin' || session.role === 'admin') && (
+                <Link href="/dashboard?panel=overview" className="px-3 py-1.5 text-sm text-foreground hover:text-fuel-green hover:bg-green-50 rounded-lg transition-colors">
+                  Admin
                 </Link>
               )}
             </nav>
@@ -37,14 +36,10 @@ export async function Header() {
             {session ? (
               <>
                 <Badge variant={session.role as UserRole} />
-                <SignOutButton redirectTo={session.role === 'superadmin' ? '/superadmin' : '/login'} />
+                <SignOutButton />
               </>
             ) : (
-              <>
-                <Link href="/login">
-                  <Button size="sm">Continue with Google</Button>
-                </Link>
-              </>
+              <GoogleSignInButton variant="primary" size="sm" className="w-auto" />
             )}
           </div>
         </div>

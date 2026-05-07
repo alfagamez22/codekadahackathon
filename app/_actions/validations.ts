@@ -1,9 +1,9 @@
 'use server'
 
 import { requireAuth } from '@/lib/auth/guards'
-import { adminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
+import { getAdminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
 import { voteSchema } from '@/lib/utils/validators'
-import { FieldValue } from 'firebase-admin/firestore'
+import { DocumentSnapshot, FieldValue, Transaction } from 'firebase-admin/firestore'
 import type { VoteType } from '@/types/report'
 
 export async function castVoteAction(input: { reportId: string; voteType: VoteType }) {
@@ -16,27 +16,37 @@ export async function castVoteAction(input: { reportId: string; voteType: VoteTy
 
   try {
     const config = await getSystemConfig()
-    const reportRef = adminDb.collection('priceReports').doc(reportId)
+    const db = await getAdminDb()
+    const reportRef = db.collection('priceReports').doc(reportId)
     const voteRef = reportRef.collection('votes').doc(userId)
 
-    await adminDb.runTransaction(async (tx) => {
-      const reportSnap = await tx.get(reportRef)
-      if (!reportSnap.exists) throw new Error('Report not found')
+    await db.runTransaction(async (tx: Transaction) => {
+      const reportSnap = (await tx.get(reportRef)) as unknown as DocumentSnapshot
+      if (!reportSnap.exists) {
+        throw new Error('Report not found')
+      }
 
-      const report = reportSnap.data()!
+      const report = reportSnap.data() as Record<string, unknown>
       const nowIso = new Date().toISOString()
-      const expiresAtMs = Date.parse(report.expiresAt ?? '')
+      const expiresAtMs = Date.parse(String(report.expiresAt ?? ''))
 
-      if (report.reporterId === userId) throw new Error('Cannot vote on your own report')
-      if (report.status !== 'pending') throw new Error('Report is no longer pending')
+      if (report.reporterId === userId) {
+        throw new Error('Cannot vote on your own report')
+      }
+
+      if (report.status !== 'pending') {
+        throw new Error('Report is no longer pending')
+      }
 
       if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
         tx.update(reportRef, { status: 'expired', updatedAt: nowIso })
         throw new Error('Report has expired')
       }
 
-      const existingVote = await tx.get(voteRef)
-      if (existingVote.exists) throw new Error('Already voted on this report')
+      const existingVote = (await tx.get(voteRef)) as unknown as DocumentSnapshot
+      if (existingVote.exists) {
+        throw new Error('Already voted on this report')
+      }
 
       tx.set(voteRef, { userId, voteType, votedAt: nowIso })
 
@@ -44,20 +54,24 @@ export async function castVoteAction(input: { reportId: string; voteType: VoteTy
 
       if (voteType === 'confirm') {
         update.confirmCount = FieldValue.increment(1)
-        const newCount = (report.confirmCount ?? 0) + 1
+        const newCount = Number(report.confirmCount ?? 0) + 1
         if (newCount >= config.minConfirmations) {
           update.status = 'confirmed'
           update.confirmationCount = newCount
           update.confirmedAt = nowIso
         }
-      } else if (voteType === 'reject') {
+      }
+
+      if (voteType === 'reject') {
         update.rejectCount = FieldValue.increment(1)
-        if ((report.rejectCount ?? 0) + 1 >= config.minConfirmations) {
+        if (Number(report.rejectCount ?? 0) + 1 >= config.minConfirmations) {
           update.status = 'rejected'
         }
-      } else if (voteType === 'flag') {
+      }
+
+      if (voteType === 'flag') {
         update.flagCount = FieldValue.increment(1)
-        if ((report.flagCount ?? 0) + 1 >= config.flagThreshold) {
+        if (Number(report.flagCount ?? 0) + 1 >= config.flagThreshold) {
           update.status = 'flagged'
         }
       }

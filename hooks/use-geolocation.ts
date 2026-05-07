@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface Coords {
   lat: number
@@ -9,6 +9,7 @@ interface Coords {
 
 interface GeolocationState {
   coords: Coords | null
+  heading: number | null
   loading: boolean
   error: string | null
   statusMessage: string | null
@@ -22,8 +23,10 @@ interface GeolocationOptions {
 
 export function useGeolocation(options: GeolocationOptions = {}): GeolocationState {
   const { auto = true } = options
+  const watchIdRef = useRef<number | null>(null)
   const [state, setState] = useState<Omit<GeolocationState, 'requestLocation'>>({
     coords: null,
+    heading: null,
     loading: auto,
     error: null,
     statusMessage: null,
@@ -34,6 +37,7 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
     if (!navigator.geolocation) {
       setState({
         coords: null,
+        heading: null,
         loading: false,
         error: 'Geolocation is not supported by your browser.',
         statusMessage: 'Your browser does not support location services.',
@@ -56,17 +60,23 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
     }
 
     const requestPosition = () => {
-      setState(prev => ({
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+        watchIdRef.current = null
+      }
+
+      setState((prev) => ({
         ...prev,
         loading: true,
         error: null,
         statusMessage: 'Requesting location permission...',
       }))
 
-      navigator.geolocation.getCurrentPosition(
+      watchIdRef.current = navigator.geolocation.watchPosition(
         (position) => {
           setState({
             coords: { lat: position.coords.latitude, lng: position.coords.longitude },
+            heading: typeof position.coords.heading === 'number' ? position.coords.heading : null,
             loading: false,
             error: null,
             statusMessage: 'Location acquired successfully.',
@@ -77,13 +87,18 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
           const message = resolveErrorMessage(err)
           setState({
             coords: null,
+            heading: null,
             loading: false,
             error: message,
             statusMessage: message,
             permission: err.code === err.PERMISSION_DENIED ? 'denied' : 'unknown',
           })
+          if (watchIdRef.current != null) {
+            navigator.geolocation.clearWatch(watchIdRef.current)
+            watchIdRef.current = null
+          }
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 3000 },
       )
     }
 
@@ -96,7 +111,7 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
       .query({ name: 'geolocation' })
       .then((result) => {
         if (result.state === 'denied') {
-          setState(prev => ({
+          setState((prev) => ({
             ...prev,
             loading: false,
             error: 'Location access is blocked. Enable it manually in your browser settings.',
@@ -106,36 +121,60 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
           return
         }
 
-        if (result.state === 'granted') {
-          setState(prev => ({
-            ...prev,
-            permission: 'granted',
-            statusMessage: 'Permission already granted. Fetching location...',
-          }))
-        } else {
-          setState(prev => ({
-            ...prev,
-            permission: 'prompt',
-            statusMessage: 'Requesting location permission...',
-          }))
-        }
-
+        setState((prev) => ({
+          ...prev,
+          permission: result.state,
+          statusMessage:
+            result.state === 'granted'
+              ? 'Permission already granted. Fetching location...'
+              : 'Requesting location permission...',
+        }))
         requestPosition()
       })
-      .catch(() => {
-        requestPosition()
-      })
+      .catch(() => requestPosition())
   }, [])
 
   useEffect(() => {
     if (!auto) return
-
-    const timeoutId = setTimeout(() => {
-      requestLocation()
-    }, 0)
-
-    return () => clearTimeout(timeoutId)
+    const timeoutId = window.setTimeout(() => requestLocation(), 0)
+    return () => {
+      window.clearTimeout(timeoutId)
+      if (watchIdRef.current != null) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+        watchIdRef.current = null
+      }
+    }
   }, [auto, requestLocation])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      const webkitEvent = event as DeviceOrientationEvent & { webkitCompassHeading?: number }
+      let nextHeading: number | null = null
+
+      if (typeof webkitEvent.webkitCompassHeading === 'number') {
+        nextHeading = webkitEvent.webkitCompassHeading
+      } else if (typeof event.alpha === 'number') {
+        nextHeading = (360 - event.alpha) % 360
+      }
+
+      if (nextHeading == null || !Number.isFinite(nextHeading)) return
+
+      setState((prev) => {
+        if (prev.heading != null && Math.abs(prev.heading - nextHeading) < 1) return prev
+        return { ...prev, heading: nextHeading }
+      })
+    }
+
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true)
+    window.addEventListener('deviceorientation', handleOrientation, true)
+
+    return () => {
+      window.removeEventListener('deviceorientationabsolute', handleOrientation, true)
+      window.removeEventListener('deviceorientation', handleOrientation, true)
+    }
+  }, [])
 
   return { ...state, requestLocation }
 }

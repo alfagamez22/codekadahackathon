@@ -9,7 +9,7 @@ export interface RouteInfo {
   endPoint: RoutePoint
   distance: number // in kilometers
   duration: number // in minutes
-  coordinates: Array<[number, number]> // lat, lng pairs
+  coordinates: Array<[number, number]> | Array<Array<[number, number]>>
 }
 
 export interface GeoapifyGeoResult {
@@ -32,7 +32,7 @@ export interface GeoapifyRouteResponse {
       time: number // seconds
     }
     geometry: {
-      coordinates: Array<[number, number]>
+      coordinates: Array<[number, number]> | Array<Array<[number, number]>>
     }
   }>
 }

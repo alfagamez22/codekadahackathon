@@ -10,8 +10,9 @@ This application will track the prices of gas and oil, and provide users with up
 - Users can also view price trends over time.
 
 ### Feature 2: Scrape oil prices from various sources
-- Make use of selenium to scrape oil prices from various sources such as news websites, financial websites, and government websites.
+- Make use of playwright, and automate all the commands to to scrape oil prices from various sources such as news websites, financial websites, and government websites with playwright-cli.
 - The application will use the scraped data to provide users with accurate and up-to-date information on oil prices.
+- Sample Template is Feature2.md, contents of the endpoint of gaswatchph.com/js/data.js?v=20260505a can be used as a reference for the data structure and evaluation.
 
 ### Feature 3: Google Maps Integration
 - User can provide destination and the application will calculate the estimated fuel cost for the trip based on current gas prices of chosen fuel type and company.

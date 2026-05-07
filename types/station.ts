@@ -24,6 +24,8 @@ export interface Station {
   lastUpdatedAt: string | null
   createdAt: string
   updatedAt: string
+  dataSource?: string
+  externalId?: string
 }
 
 export interface StationPrice {

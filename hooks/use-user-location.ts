@@ -13,25 +13,29 @@ export function useUserLocation() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setError('Geolocation not supported')
-      return
-    }
-
-    setLoading(true)
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        })
-        setLoading(false)
-      },
-      (err) => {
-        setError(err.message)
-        setLoading(false)
+    const timeoutId = window.setTimeout(() => {
+      if (!navigator.geolocation) {
+        setError('Geolocation not supported')
+        return
       }
-    )
+
+      setLoading(true)
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          })
+          setLoading(false)
+        },
+        (err) => {
+          setError(err.message)
+          setLoading(false)
+        },
+      )
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [])
 
   return { location, loading, error }

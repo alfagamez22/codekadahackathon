@@ -2,8 +2,9 @@ import 'server-only'
 import { getFirestore } from 'firebase-admin/firestore'
 import getAdminApp from './index'
 
-function getAdminDb() {
-  return getFirestore(getAdminApp())
+async function getAdminDb() {
+  const app = await getAdminApp()
+  return getFirestore(app)
 }
 
 export const defaultSystemConfig = {
@@ -18,7 +19,8 @@ export const defaultSystemConfig = {
 export type SystemConfig = typeof defaultSystemConfig
 
 export async function getSystemConfig(): Promise<SystemConfig> {
-  const snap = await getAdminDb().collection('systemConfig').doc('settings').get()
+  const db = await getAdminDb()
+  const snap = await db.collection('systemConfig').doc('settings').get()
 
   if (!snap.exists) {
     return defaultSystemConfig
@@ -30,8 +32,28 @@ export async function getSystemConfig(): Promise<SystemConfig> {
   }
 }
 
-export const adminDb = new Proxy({} as ReturnType<typeof getAdminDb>, {
+export const adminDb = new Proxy({} as any, {
   get(_, prop) {
-    return (getAdminDb() as never as Record<string | symbol, unknown>)[prop as string | symbol]
+    if (prop === 'collection' || prop === 'doc') {
+      return (...args: any[]) =>
+        getAdminDb().then((db) => {
+          const target = (db as any)[prop]
+          return target.apply(db, args)
+        })
+    }
+
+    return (...args: any[]) =>
+      getAdminDb()
+        .then((db) => {
+          const target = (db as any)[prop]
+          if (typeof target === 'function') return target.apply(db, args)
+          return target
+        })
+        .catch((err) => {
+          console.error(`adminDb.${String(prop)} failed:`, err)
+          throw err
+        })
   },
 })
+
+export { getAdminDb }

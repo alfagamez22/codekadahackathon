@@ -1,11 +1,12 @@
 'use server'
 
 import { requireAuth } from '@/lib/auth/guards'
-import { adminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
-import { getCurrentPrices } from '@/lib/db/queries/prices'
+import { getAdminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
+import { getCurrentPrices } from '@/lib/firebase-admin/queries/prices'
 import { priceReportSchema } from '@/lib/utils/validators'
-import { incrementUserReportCount } from '@/lib/db/queries/users'
+import { incrementUserReportCount } from '@/lib/firebase-admin/queries/users'
 import { updateTag } from 'next/cache'
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import type { PriceReportInput } from '@/lib/utils/validators'
 
 export async function submitPriceReportAction(input: PriceReportInput) {
@@ -16,13 +17,14 @@ export async function submitPriceReportAction(input: PriceReportInput) {
   const { stationId, fuelType, reportedPrice, evidenceUrl } = parsed.data
   const config = await getSystemConfig()
 
-  const recentReports = await adminDb
+  const db = await getAdminDb()
+  const recentReports = await db
     .collection('priceReports')
     .where('reporterId', '==', session.uid)
     .get()
 
   const cooldownCutoffMs = Date.now() - config.reportCooldownHours * 60 * 60 * 1000
-  const hasRecentDuplicate = recentReports.docs.some((doc) => {
+  const hasRecentDuplicate = recentReports.docs.some((doc: QueryDocumentSnapshot) => {
     const report = doc.data() as {
       stationId?: string
       fuelType?: string
@@ -73,7 +75,7 @@ export async function submitPriceReportAction(input: PriceReportInput) {
     ? Number((((reportedPrice - matchingPrice.currentPrice) / matchingPrice.currentPrice) * 100).toFixed(2))
     : null
 
-  const docRef = await adminDb.collection('priceReports').add({
+  const docRef = await db.collection('priceReports').add({
     stationId,
     fuelType,
     reportedPrice,
@@ -101,7 +103,8 @@ export async function submitPriceReportAction(input: PriceReportInput) {
 export async function flagReportAction(reportId: string) {
   await requireAuth()
 
-  await adminDb.collection('priceReports').doc(reportId).update({
+  const db = await getAdminDb()
+  await db.collection('priceReports').doc(reportId).update({
     status: 'flagged',
     updatedAt: new Date().toISOString(),
   })

@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "confirmedReportCount",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "trustScore",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "priceReports",
       "queryScope": "COLLECTION",
       "fields": [

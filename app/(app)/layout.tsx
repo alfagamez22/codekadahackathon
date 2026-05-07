@@ -4,7 +4,7 @@ import { MobileNav } from '@/components/layout/mobile-nav'
 import type { ReactNode } from 'react'
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  await requireAuth()
+  const session = await requireAuth()
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           {children}
         </div>
       </main>
-      <MobileNav />
+      <MobileNav role={session.role} />
     </div>
   )
 }

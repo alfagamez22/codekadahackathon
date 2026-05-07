@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/auth/guards'
-import { getStation } from '@/lib/db/queries/stations'
-import { getPriceHistory } from '@/lib/db/queries/prices'
+import { getStation } from '@/lib/firebase-admin/queries/stations'
+import { getPriceHistory } from '@/lib/firebase-admin/queries/prices'
 import { PageHeader } from '@/components/layout/page-header'
 import { Card } from '@/components/ui/card'
 import { formatPeso, formatDate, formatFuelType } from '@/lib/utils/format'

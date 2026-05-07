@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getPriceHistory } from '@/lib/db/queries/prices'
+import { getPriceHistory } from '@/lib/firebase-admin/queries/prices'
 import type { FuelType } from '@/types/station'
 
 export async function GET(request: NextRequest) {

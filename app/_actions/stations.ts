@@ -1,12 +1,11 @@
 'use server'
 
 import { requireRole } from '@/lib/auth/guards'
-import { createStation, updateStation, deleteStation } from '@/lib/db/queries/stations'
-import { upsertConfirmedPrice } from '@/lib/db/queries/prices'
+import { createStation, updateStation, deleteStation } from '@/lib/firebase-admin/queries/stations'
+import { upsertConfirmedPrice } from '@/lib/firebase-admin/queries/prices'
 import { adminDb } from '@/lib/firebase-admin/firestore'
 import { stationSchema } from '@/lib/utils/validators'
 import { updateTag } from 'next/cache'
-import sql from '@/lib/db'
 import type { StationInput } from '@/lib/utils/validators'
 import type { FuelType } from '@/types/station'
 

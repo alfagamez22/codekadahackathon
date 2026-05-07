@@ -5,9 +5,14 @@ import { readSession, clearSessionCookie } from '@/lib/auth/session'
 import { revokeRefreshTokens } from '@/lib/firebase-admin/auth'
 
 export async function POST() {
-  const session = await readSession()
-  if (session) {
-    await revokeRefreshTokens(session.uid)
+  try {
+    const session = await readSession()
+    if (session) {
+      await revokeRefreshTokens(session.uid)
+    }
+  } catch (error) {
+    // Always continue logout locally even if token revocation fails.
+    console.error('Failed to revoke refresh tokens during logout:', error)
   }
 
   await clearSessionCookie()

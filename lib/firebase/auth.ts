@@ -8,11 +8,17 @@ import {
   type User,
 } from 'firebase/auth'
 import { getFirebaseAuth } from './client'
+import type { UserRole } from '@/types/auth'
 
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-export async function syncServerSession(user: User): Promise<void> {
+export interface SessionSyncResult {
+  role: UserRole
+  redirectTo: string
+}
+
+export async function syncServerSession(user: User): Promise<SessionSyncResult> {
   const idToken = await user.getIdToken()
   const response = await fetch('/api/auth/session', {
     method: 'POST',
@@ -21,9 +27,17 @@ export async function syncServerSession(user: User): Promise<void> {
     body: JSON.stringify({ idToken }),
   })
 
-  if (response.ok) return
+  const payload = (await response.json().catch(() => null)) as
+    | { role?: UserRole; redirectTo?: string; error?: string }
+    | null
 
-  const payload = (await response.json().catch(() => null)) as { error?: string } | null
+  if (response.ok) {
+    return {
+      role: payload?.role ?? 'user',
+      redirectTo: payload?.redirectTo ?? '/dashboard',
+    }
+  }
+
   throw new Error(payload?.error ?? 'Failed to create server session')
 }
 

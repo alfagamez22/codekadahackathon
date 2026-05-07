@@ -53,3 +53,9 @@ body {
 html {
   scroll-behavior: smooth;
 }
+
+/* Leaflet div-icon reset — remove default white box behind custom markers */
+.leaflet-div-icon {
+  background: transparent !important;
+  border: none !important;
+}

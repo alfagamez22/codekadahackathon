@@ -1,5 +1,5 @@
 import { requireAuth } from '@/lib/auth/guards'
-import { getUser } from '@/lib/db/queries/users'
+import { getUser } from '@/lib/firebase-admin/queries/users'
 import { PageHeader } from '@/components/layout/page-header'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
