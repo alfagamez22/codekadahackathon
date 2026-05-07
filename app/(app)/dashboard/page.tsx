@@ -64,9 +64,25 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
   const activePanel: DashboardPanel = isAdmin && isDashboardPanel(requestedPanel) ? requestedPanel : 'overview'
   const phTimestamp = getPhilippineTimestamp()
 
-  const [stats, contributors, gaswatchSnapshot, usersData, stationsData, stationSubmissions, config] = await Promise.all([
-    getSystemStats(),
-    getTopContributors(5),
+  let stats: Awaited<ReturnType<typeof getSystemStats>> | null = null
+  let contributors: Awaited<ReturnType<typeof getTopContributors>> = []
+  let statsError: string | null = null
+
+  try {
+    ;[stats, contributors] = await Promise.all([
+      getSystemStats(),
+      getTopContributors(5),
+    ])
+  } catch (err) {
+    const code = (err as { code?: number })?.code
+    if (code === 8) {
+      statsError = 'Service is temporarily unavailable due to high demand. Please try again in a moment.'
+    } else {
+      throw err
+    }
+  }
+
+  const [gaswatchSnapshot, usersData, stationsData, stationSubmissions, config] = await Promise.all([
     activePanel === 'overview' ? getGaswatchSnapshot() : Promise.resolve(null),
     isAdmin && activePanel === 'users' ? listUsers({}) : Promise.resolve(null),
     isAdmin && activePanel === 'stations' ? searchStations({}) : Promise.resolve(null),
@@ -77,13 +93,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
   const gaswatchStations = gaswatchSnapshot?.stations ?? null
   const priceWeek = gaswatchSnapshot?.priceWeek ?? null
 
-  const gasolineAvg = stats.averagePrices.find((p) => p.fuelType === 'gasoline')?.avgPrice
+  const gasolineAvg = stats?.averagePrices.find((p) => p.fuelType === 'gasoline')?.avgPrice
   const dashboardStats = [
-    { label: 'Stations', value: stats.stationCount.toLocaleString(), icon: 'ri-gas-station-line' },
-    { label: 'Price Updates', value: stats.reportCount.toLocaleString(), icon: 'ri-bar-chart-line' },
-    { label: 'Community Members', value: stats.userCount.toLocaleString(), icon: 'ri-group-line' },
+    { label: 'Stations', value: stats?.stationCount.toLocaleString() ?? '—', icon: 'ri-gas-station-line' },
+    { label: 'Price Updates', value: stats?.reportCount.toLocaleString() ?? '—', icon: 'ri-bar-chart-line' },
+    { label: 'Community Members', value: stats?.userCount.toLocaleString() ?? '—', icon: 'ri-group-line' },
     { label: 'Avg. Gasoline', value: formatCurrency(gasolineAvg), icon: 'ri-money-peso-circle-line' },
   ]
+
+  if (statsError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
+        <i className="ri-error-warning-line text-4xl text-muted-foreground" />
+        <p className="text-sm text-muted-foreground max-w-sm">{statsError}</p>
+        <a
+          href="/dashboard"
+          className="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+        >
+          <i className="ri-refresh-line" /> Try again
+        </a>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">

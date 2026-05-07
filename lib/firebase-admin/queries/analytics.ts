@@ -25,23 +25,11 @@ export type GlobalStats = {
 }
 
 export async function getSystemStats(): Promise<GlobalStats> {
-  const fallback: GlobalStats = { stationCount: 0, reportCount: 0, userCount: 0, averagePrices: [] }
-  let snap
-  try {
-    const db = await getAdminDb()
-    snap = await db.doc(STATS_DOC).get()
-  } catch (err) {
-    const code = (err as { code?: number })?.code
-    if (code === 8) {
-      // RESOURCE_EXHAUSTED — quota exceeded, return cached defaults gracefully
-      console.warn('[analytics] Firestore quota exceeded, returning fallback stats')
-      return fallback
-    }
-    throw err
-  }
+  const db = await getAdminDb()
+  const snap = await db.doc(STATS_DOC).get()
 
   if (!snap.exists) {
-    return fallback
+    return { stationCount: 0, reportCount: 0, userCount: 0, averagePrices: [] }
   }
 
   const data = snap.data() as {
@@ -115,33 +103,24 @@ export async function updatePriceAverage(
 }
 
 export async function getTopContributors(limit = 10) {
-  try {
-    const db = await getAdminDb()
-    const snap = await db
-      .collection('users')
-      .orderBy('confirmedReportCount', 'desc')
-      .limit(limit * 3)
-      .get()
+  const db = await getAdminDb()
+  const snap = await db
+    .collection('users')
+    .orderBy('confirmedReportCount', 'desc')
+    .limit(limit * 3)
+    .get()
 
-    return snap.docs
-      .map((d) => {
-        const u = d.data()
-        const uid = typeof u.uid === 'string' && u.uid.trim().length > 0 ? u.uid : d.id
-        return {
-          uid,
-          displayName: u.displayName as string | null,
-          confirmedReportCount: u.confirmedReportCount as number,
-          trustScore: u.trustScore as number,
-        }
-      })
-      .sort((a, b) => b.confirmedReportCount - a.confirmedReportCount || b.trustScore - a.trustScore)
-      .slice(0, limit)
-  } catch (err) {
-    const code = (err as { code?: number })?.code
-    if (code === 8) {
-      console.warn('[analytics] Firestore quota exceeded, returning empty contributors')
-      return []
-    }
-    throw err
-  }
+  return snap.docs
+    .map((d) => {
+      const u = d.data()
+      const uid = typeof u.uid === 'string' && u.uid.trim().length > 0 ? u.uid : d.id
+      return {
+        uid,
+        displayName: u.displayName as string | null,
+        confirmedReportCount: u.confirmedReportCount as number,
+        trustScore: u.trustScore as number,
+      }
+    })
+    .sort((a, b) => b.confirmedReportCount - a.confirmedReportCount || b.trustScore - a.trustScore)
+    .slice(0, limit)
 }
