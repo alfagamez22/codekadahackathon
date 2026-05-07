@@ -1,4 +1,4 @@
-# GasTrackPH
+# GAStos
 
 **Live site:** [https://golteb5.vercel.app/login]()
 

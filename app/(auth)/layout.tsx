@@ -7,11 +7,14 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
   if (session) redirect('/dashboard')
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#f9fafb] px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="text-4xl mb-2">⛽</div>
-          <span className="text-xl font-bold text-fuel-green">Gas Price Tracker PH</span>
+        {/* Logo */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <div className="flex h-7 w-7 items-center justify-center rounded bg-[#0a0a0a]">
+            <i className="ri-gas-station-fill text-sm text-white" />
+          </div>
+          <span className="text-base font-semibold tracking-[-0.01em] text-[#0a0a0a]">GASTOS</span>
         </div>
         {children}
       </div>

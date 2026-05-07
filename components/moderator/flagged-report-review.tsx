@@ -32,13 +32,13 @@ export function FlaggedReportReview() {
     setPending(null)
   }
 
-  if (loading) return <div className="text-muted text-sm">Loading flagged reports...</div>
+  if (loading) return <p className="text-sm text-muted-foreground">Loading flagged reports...</p>
 
   if (reports.length === 0) {
     return (
-      <div className="text-center py-12 text-muted">
-        <div className="text-4xl mb-3">✅</div>
-        <div>No flagged reports. Queue is clear.</div>
+      <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-border bg-muted/30">
+        <i className="ri-checkbox-circle-line text-3xl text-[#16a34a] mb-3" />
+        <p className="text-sm text-muted-foreground">No flagged reports. Queue is clear.</p>
       </div>
     )
   }
@@ -49,31 +49,22 @@ export function FlaggedReportReview() {
         <Card key={report.id}>
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <div className="font-medium">{formatFuelType(report.fuelType)}</div>
-              <div className="text-xl font-bold text-fuel-red mt-1">{formatPeso(report.reportedPrice)}</div>
-              <div className="text-xs text-muted mt-1">
+              <div className="text-sm font-medium text-foreground">{formatFuelType(report.fuelType)}</div>
+              <div className="text-xl font-semibold tabular-nums text-destructive mt-1">{formatPeso(report.reportedPrice)}</div>
+              <div className="text-xs text-muted-foreground mt-1">
                 Reported {formatRelativeTime(report.createdAt)} · {report.flagCount} flags
               </div>
             </div>
-            <div className="flex gap-2">
-              <Badge variant="flagged" label="Flagged" />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleDismiss(report.id)}
-                loading={pending === report.id}
-              >
+            <div className="flex items-center gap-2">
+              <Badge variant="flagged" />
+              <Button size="sm" variant="secondary" onClick={() => handleDismiss(report.id)} loading={pending === report.id}>
                 Dismiss
               </Button>
             </div>
           </div>
           {report.evidenceUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={report.evidenceUrl}
-              alt="Evidence"
-              className="mt-3 rounded-lg max-h-40 object-contain bg-gray-50"
-            />
+            <img src={report.evidenceUrl} alt="Evidence" className="mt-3 rounded-md max-h-40 object-contain bg-muted border border-border" />
           )}
         </Card>
       ))}

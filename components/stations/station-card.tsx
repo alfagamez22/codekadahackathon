@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatPeso, formatRelativeTime, formatFuelType } from '@/lib/utils/format'
 import type { Station } from '@/types/station'
@@ -26,42 +25,49 @@ export function StationCard({ station, distanceKm }: StationCardProps) {
 
   return (
     <Link href={`/stations/${station.id}`}>
-      <Card className="hover:border-fuel-green cursor-pointer transition-colors group">
-        <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="rounded-lg border border-border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {station.brand ?? 'Station'}
+          </span>
+          {distanceKm != null && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <i className="ri-map-pin-2-line" />
+              {distanceKm.toFixed(1)} km
+            </span>
+          )}
+        </div>
+
+        <div className="px-4 py-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="font-semibold text-foreground group-hover:text-fuel-green transition-colors truncate">
-              {station.name}
-            </div>
-            <div className="text-sm text-muted">
-              {station.brand && <span className="font-medium">{station.brand} · </span>}
+            <div className="text-sm font-semibold text-foreground truncate">{station.name}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
               {station.city}, {station.province}
             </div>
           </div>
-          <div className="text-right shrink-0">
-            {lowestPrice != null && (
-              <div className="text-lg font-bold text-fuel-green">{formatPeso(lowestPrice)}</div>
-            )}
-            {distanceKm != null && (
-              <div className="text-xs text-muted">{distanceKm.toFixed(1)} km</div>
-            )}
-          </div>
+          {lowestPrice != null && (
+            <div className="text-2xl font-semibold tabular-nums text-[#16a34a] shrink-0">
+              {formatPeso(lowestPrice)}
+            </div>
+          )}
         </div>
 
         {prices.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2 px-4 pb-3">
             {prices.map((p) => (
               <div key={p.fuelType} className="flex items-center gap-1.5">
-                <Badge variant={getPriceBadge(p)} label={formatFuelType(p.fuelType)} />
-                <span className="text-xs font-medium text-foreground">{formatPeso(p.currentPrice)}</span>
+                <span className="text-xs text-muted-foreground">{formatFuelType(p.fuelType)}</span>
+                <span className="text-xs font-semibold tabular-nums text-foreground">{formatPeso(p.currentPrice)}</span>
+                <Badge variant={getPriceBadge(p)} />
               </div>
             ))}
           </div>
         )}
 
         {prices.length === 0 && (
-          <div className="text-xs text-muted italic">No prices reported yet</div>
+          <div className="px-4 pb-3 text-xs text-muted-foreground">No prices reported yet</div>
         )}
-      </Card>
+      </div>
     </Link>
   )
 }

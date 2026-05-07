@@ -22,8 +22,10 @@ export function PendingReportCard({ report, currentUserId }: PendingReportCardPr
       <CardHeader>
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
-            <CardTitle className="text-base">{formatFuelType(report.fuelType)}</CardTitle>
-            <div className="text-2xl font-bold text-fuel-green mt-1">{formatPeso(report.reportedPrice)}</div>
+            <CardTitle className="text-sm">{formatFuelType(report.fuelType)}</CardTitle>
+            <div className="text-2xl font-semibold tabular-nums text-[#16a34a] mt-1">
+              {formatPeso(report.reportedPrice)}
+            </div>
           </div>
           <ValidationStatusBadge
             status={report.status}
@@ -40,18 +42,18 @@ export function PendingReportCard({ report, currentUserId }: PendingReportCardPr
           <img
             src={report.evidenceUrl}
             alt="Price evidence"
-            className="rounded-lg max-h-48 object-contain w-full bg-gray-50"
+            className="max-h-48 object-contain w-full rounded-md bg-muted border border-border"
           />
         )}
 
-        <div className="flex items-center gap-3 text-xs text-muted">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span>Reported {formatRelativeTime(report.createdAt)}</span>
           <span>·</span>
           <span>Expires {formatRelativeTime(report.expiresAt)}</span>
         </div>
 
         {typeof report.baselinePrice === 'number' ? (
-          <div className="text-xs text-muted">
+          <div className="text-xs text-muted-foreground border-l-2 border-border pl-3">
             Baseline {formatPeso(report.baselinePrice)}
             {typeof report.priceDeltaPercent === 'number'
               ? ` · ${report.priceDeltaPercent > 0 ? '+' : ''}${report.priceDeltaPercent.toFixed(2)}% vs current`
@@ -59,20 +61,23 @@ export function PendingReportCard({ report, currentUserId }: PendingReportCardPr
           </div>
         ) : null}
 
-        <div className="flex gap-2 text-xs">
+        <div className="flex gap-2">
           <Badge variant="confirmed" label={`${report.confirmCount} confirms`} />
           <Badge variant="rejected" label={`${report.rejectCount} rejects`} />
           {report.flagCount > 0 && <Badge variant="flagged" label={`${report.flagCount} flags`} />}
         </div>
 
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted-foreground">
           {remainingConfirms === 0
             ? 'Ready to confirm on the next qualifying vote.'
             : `${remainingConfirms} more confirmation${remainingConfirms === 1 ? '' : 's'} needed to verify this report.`}
         </p>
 
         {isOwn ? (
-          <p className="text-xs text-muted italic">You submitted this report</p>
+          <p className="text-xs text-muted-foreground rounded-md bg-muted/50 border border-border px-3 py-2">
+            <i className="ri-user-line mr-1" />
+            You submitted this report
+          </p>
         ) : (
           <VoteButtons reportId={report.id} disabled={report.status !== 'pending'} />
         )}

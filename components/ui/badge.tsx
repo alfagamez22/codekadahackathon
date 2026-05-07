@@ -1,4 +1,5 @@
 import type { PriceBadge } from '@/types/station'
+import { cn } from '@/lib/utils'
 
 const badgeConfig: Record<
   PriceBadge | 'superadmin' | 'moderator' | 'admin' | 'user' | 'pending' | 'confirmed' | 'rejected' | 'flagged' | 'expired',
@@ -6,59 +7,59 @@ const badgeConfig: Record<
 > = {
   'admin-verified': {
     label: 'Admin Verified',
-    className: 'bg-amber-100 text-amber-800 border border-amber-200',
+    className: 'bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]',
   },
   'community-verified': {
     label: 'Community Verified',
-    className: 'bg-fuel-green-light text-fuel-green-dark border border-green-200',
+    className: 'bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]',
   },
   'pending-update': {
     label: 'Pending Update',
-    className: 'bg-fuel-yellow-light text-amber-800 border border-yellow-200',
+    className: 'bg-[#fffbeb] text-[#d97706] border-[#fde68a]',
   },
   baseline: {
     label: 'Baseline Price',
-    className: 'bg-fuel-gray-light text-fuel-gray border border-gray-200',
+    className: 'bg-[#f3f4f6] text-[#6b7280] border-[#e5e7eb]',
   },
   stale: {
     label: 'Stale Price',
-    className: 'bg-fuel-red-light text-fuel-red border border-red-200',
+    className: 'bg-[#fef2f2] text-[#dc2626] border-[#fecaca]',
   },
   moderator: {
     label: 'Moderator',
-    className: 'bg-purple-100 text-purple-800 border border-purple-200',
+    className: 'bg-[#eff6ff] text-[#2563eb] border-[#bfdbfe]',
   },
   superadmin: {
     label: 'Superadmin',
-    className: 'bg-slate-900 text-white border border-slate-700',
+    className: 'bg-[#0a0a0a] text-white border-[#0a0a0a]',
   },
   admin: {
     label: 'Admin',
-    className: 'bg-amber-100 text-amber-800 border border-amber-200',
+    className: 'bg-[#f3f4f6] text-[#0a0a0a] border-[#e5e7eb]',
   },
   user: {
     label: 'User',
-    className: 'bg-blue-100 text-blue-800 border border-blue-200',
+    className: 'bg-[#f3f4f6] text-[#6b7280] border-[#e5e7eb]',
   },
   pending: {
     label: 'Pending',
-    className: 'bg-fuel-yellow-light text-amber-800 border border-yellow-200',
+    className: 'bg-[#fffbeb] text-[#d97706] border-[#fde68a]',
   },
   confirmed: {
     label: 'Confirmed',
-    className: 'bg-fuel-green-light text-fuel-green-dark border border-green-200',
+    className: 'bg-[#f0fdf4] text-[#16a34a] border-[#bbf7d0]',
   },
   rejected: {
     label: 'Rejected',
-    className: 'bg-fuel-red-light text-fuel-red border border-red-200',
+    className: 'bg-[#fef2f2] text-[#dc2626] border-[#fecaca]',
   },
   flagged: {
     label: 'Flagged',
-    className: 'bg-orange-100 text-orange-800 border border-orange-200',
+    className: 'bg-[#fef2f2] text-[#dc2626] border-[#fecaca]',
   },
   expired: {
     label: 'Expired',
-    className: 'bg-gray-100 text-gray-500 border border-gray-200',
+    className: 'bg-[#f3f4f6] text-[#9ca3af] border-[#e5e7eb]',
   },
 }
 
@@ -74,7 +75,11 @@ export function Badge({ variant, label, className = '' }: BadgeProps) {
   const config = badgeConfig[variant] ?? badgeConfig.baseline
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.className} ${className}`}
+      className={cn(
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+        config.className,
+        className,
+      )}
     >
       {label ?? config.label}
     </span>

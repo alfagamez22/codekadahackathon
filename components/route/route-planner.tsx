@@ -250,20 +250,22 @@ export function RoutePlanner() {
         <form onSubmit={handleCalculateRoute} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Starting Point</label>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter address or search..."
-                value={startAddress}
-                onChange={(e) => setStartAddress(e.target.value)}
-              />
+            <div className="flex gap-2 items-start">
+              <div className="flex-1 min-w-0">
+                <Input
+                  placeholder="Enter address or search..."
+                  value={startAddress}
+                  onChange={(e) => setStartAddress(e.target.value)}
+                />
+              </div>
               {userLocation && (
                 <Button
                   type="button"
                   variant="secondary"
                   onClick={() => setStartAddress('current')}
-                  className="whitespace-nowrap"
+                  className="whitespace-nowrap shrink-0"
                 >
-                  📍 Use Current
+                  <i className="ri-map-pin-2-line" /> Use Current
                 </Button>
               )}
             </div>

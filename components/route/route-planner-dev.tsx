@@ -90,7 +90,7 @@ export function RoutePlannerDev() {
                   onClick={() => setStartAddress('current')}
                   className="whitespace-nowrap"
                 >
-                  📍 Use Current
+                  <i className="ri-map-pin-2-line" /> Use Current
                 </Button>
               )}
             </div>

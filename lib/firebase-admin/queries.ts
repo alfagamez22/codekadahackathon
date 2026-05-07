@@ -41,7 +41,7 @@ export async function searchStations(params: {
   // Client-side text search (Firestore doesn't support ILIKE)
   if (search) {
     const lower = search.toLowerCase()
-    docs = docs.filter((d) => {
+    docs = docs.filter((d: FirebaseFirestore.QueryDocumentSnapshot) => {
       const data = d.data()
       return (
         (data.name as string)?.toLowerCase().includes(lower) ||
@@ -54,7 +54,7 @@ export async function searchStations(params: {
   const total = docs.length
   const paginated = docs.slice((page - 1) * pageSize, page * pageSize)
 
-  const stations: StationListItem[] = paginated.map((d) => {
+  const stations: StationListItem[] = paginated.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
     const data = d.data()
     return {
       id: d.id,
@@ -182,7 +182,7 @@ export async function deleteStation(id: string): Promise<void> {
   // Also clean up associated fuel prices
   const pricesSnap = await adminDb.collection('fuelPrices').where('stationId', '==', id).get()
   const batch = adminDb.batch()
-  pricesSnap.docs.forEach((d) => batch.delete(d.ref))
+  pricesSnap.docs.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => batch.delete(d.ref))
   await batch.commit()
 }
 
@@ -192,7 +192,7 @@ export async function deleteStation(id: string): Promise<void> {
 
 export async function getCurrentPrices(stationId: string): Promise<FuelPrice[]> {
   const snap = await adminDb.collection('fuelPrices').where('stationId', '==', stationId).get()
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as FuelPrice)
+  return snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() }) as FuelPrice)
 }
 
 export async function getPriceHistory(params: {
@@ -214,7 +214,7 @@ export async function getPriceHistory(params: {
   if (to) query = query.where('changedAt', '<=', to) as typeof query
 
   const snap = await query.limit(limit).get()
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as PriceHistory)
+  return snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({ id: d.id, ...d.data() }) as PriceHistory)
 }
 
 export async function upsertConfirmedPrice(data: {
@@ -353,7 +353,7 @@ export async function listUsers(params: {
   const total = allSnap.size
   const paginated = allSnap.docs.slice((page - 1) * pageSize, page * pageSize)
 
-  const users: UserProfile[] = paginated.map((d) => ({
+  const users: UserProfile[] = paginated.map((d: FirebaseFirestore.QueryDocumentSnapshot) => ({
     uid: d.id,
     ...d.data(),
   })) as UserProfile[]
@@ -414,7 +414,7 @@ export async function getTopContributors(limit = 10) {
     .limit(limit)
     .get()
 
-  return snap.docs.map((d) => {
+  return snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
     const data = d.data()
     return {
       uid: d.id,

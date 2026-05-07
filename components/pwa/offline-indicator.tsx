@@ -20,7 +20,8 @@ export function OfflineIndicator() {
   if (isOnline) return null
 
   return (
-    <div className="fixed top-0 inset-x-0 bg-fuel-red text-white text-center text-sm py-2 z-50">
+    <div className="fixed top-0 inset-x-0 bg-[#dc2626] text-white text-center text-xs font-medium py-2 z-50 flex items-center justify-center gap-2">
+      <i className="ri-wifi-off-line" />
       You are offline. Some features may be unavailable.
     </div>
   )

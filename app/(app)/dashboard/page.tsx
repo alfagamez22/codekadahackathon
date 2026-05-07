@@ -3,15 +3,21 @@ import { getSystemStats, getTopContributors } from '@/lib/firebase-admin/queries
 import { listUsers } from '@/lib/firebase-admin/queries/users'
 import { searchStations } from '@/lib/firebase-admin/queries/stations'
 import { getSystemConfig } from '@/lib/firebase-admin/firestore'
-import { fetchGaswatchScript, parseGaswatchStations, parsePriceHistory, findCurrentWeekPrices, getPhilippineDateString, type GaswatchStation, type GaswatchPriceWeek } from '@/lib/gaswatchph'
-import { Card, CardHeader, CardTitle } from '@/components/ui/card'
-import { PageHeader } from '@/components/layout/page-header'
+import {
+  fetchGaswatchScript,
+  parseGaswatchStations,
+  parsePriceHistory,
+  findCurrentWeekPrices,
+  getPhilippineDateString,
+  type GaswatchStation,
+  type GaswatchPriceWeek,
+} from '@/lib/gaswatchph'
 import { UserManagementTable } from '@/components/admin/user-management-table'
 import { StationEditor } from '@/components/admin/station-editor'
 import { SystemConfigForm } from '@/components/admin/system-config-form'
 import { PriceAutoRefresher } from '@/components/dashboard/price-auto-refresher'
+import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
 import type { Metadata } from 'next'
 import type { SessionUser } from '@/types/auth'
 
@@ -28,20 +34,6 @@ const adminPanels: Array<{ id: DashboardPanel; label: string }> = [
   { id: 'config', label: 'Config' },
 ]
 
-const fuelTypeLabels: Record<string, string> = {
-  diesel: 'Diesel',
-  gasoline: 'Regular Gasoline',
-  unleaded: 'Regular Gasoline',
-  premium: 'Premium Gasoline',
-  premium95: 'Premium Gasoline',
-  premium97: 'Premium Gasoline',
-  premiumDiesel: 'Premium Diesel',
-  kerosene: 'Kerosene',
-  lpg: 'LPG',
-}
-
-const fuelTypeOrder = ['diesel', 'gasoline', 'unleaded', 'premium', 'premium95', 'premium97', 'premiumDiesel', 'kerosene', 'lpg']
-
 function isDashboardPanel(value: string | undefined): value is DashboardPanel {
   return value === 'overview' || value === 'users' || value === 'stations' || value === 'config'
 }
@@ -52,23 +44,6 @@ function isAdminSession(session: SessionUser) {
 
 function formatCurrency(value: number | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? `₱${value.toFixed(2)}` : '—'
-}
-
-function formatFuelType(fuelType: string) {
-  return fuelTypeLabels[fuelType] ?? fuelType
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (char) => char.toUpperCase())
-}
-
-function sortAveragePrices(prices: Array<{ fuelType: string; avgPrice: number }>) {
-  return [...prices].sort((a, b) => {
-    const aIndex = fuelTypeOrder.indexOf(a.fuelType)
-    const bIndex = fuelTypeOrder.indexOf(b.fuelType)
-    if (aIndex === -1 && bIndex === -1) return (a.fuelType || '').localeCompare(b.fuelType || '')
-    if (aIndex === -1) return 1
-    if (bIndex === -1) return -1
-    return aIndex - bIndex
-  })
 }
 
 function getPhilippineTimestamp() {
@@ -101,39 +76,66 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
 
   const gasolineAvg = stats.averagePrices.find((p) => p.fuelType === 'gasoline')?.avgPrice
   const dashboardStats = [
-    { label: 'Stations', value: stats.stationCount.toLocaleString(), icon: '⛽' },
-    { label: 'Price Updates', value: stats.reportCount.toLocaleString(), icon: '📊' },
-    { label: 'Community Members', value: stats.userCount.toLocaleString(), icon: '👥' },
-    { label: 'Avg. Gasoline', value: formatCurrency(gasolineAvg), icon: '💰' },
+    { label: 'Stations', value: stats.stationCount.toLocaleString(), icon: 'ri-gas-station-line' },
+    { label: 'Price Updates', value: stats.reportCount.toLocaleString(), icon: 'ri-bar-chart-line' },
+    { label: 'Community Members', value: stats.userCount.toLocaleString(), icon: 'ri-group-line' },
+    { label: 'Avg. Gasoline', value: formatCurrency(gasolineAvg), icon: 'ri-money-peso-circle-line' },
   ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Hello, ${session.displayName?.split(' ')[0] ?? 'there'} 👋`}
-        description={
-          isAdmin
-            ? 'Track fuel prices and manage system data from one dashboard.'
-            : 'Track and report fuel prices across the Philippines.'
-        }
-        action={
-          <Link href="/stations/nearby">
-            <Button size="sm">📍 Find Nearby</Button>
-          </Link>
-        }
-      />
+    <div className="space-y-8">
 
-      {isAdmin && <DashboardTabs activePanel={activePanel} />}
+      {/* ── Page header ── */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground mb-0.5">
+            {new Intl.DateTimeFormat('en-PH', {
+              timeZone: 'Asia/Manila',
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+            }).format(new Date())}
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Hello, {session.displayName?.split(' ')[0] ?? 'there'}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isAdmin
+              ? 'Track fuel prices and manage system data from one dashboard.'
+              : 'Track and report fuel prices across the Philippines.'}
+          </p>
+        </div>
+        <Link
+          href="/stations/nearby"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted shrink-0"
+        >
+          <i className="ri-map-pin-2-line text-base" />
+          Find Nearby
+        </Link>
+      </div>
 
+      {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {dashboardStats.map((stat) => (
-          <Card key={stat.label} className="text-center">
-            <div className="text-2xl mb-1">{stat.icon}</div>
-            <div className="text-xl font-bold text-foreground">{stat.value}</div>
-            <div className="text-xs text-muted">{stat.label}</div>
-          </Card>
+          <div
+            key={stat.label}
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                {stat.label}
+              </span>
+              <i className={`${stat.icon} text-base text-muted-foreground`} />
+            </div>
+            <div className="text-3xl font-semibold tabular-nums text-foreground">
+              {stat.value}
+            </div>
+          </div>
         ))}
       </div>
+
+      {/* ── Admin tabs ── */}
+      {isAdmin && <DashboardTabs activePanel={activePanel} />}
 
       {isAdmin && activePanel !== 'overview' ? (
         <AdminPanelContent
@@ -173,16 +175,16 @@ async function getGaswatchSnapshot() {
 
 function DashboardTabs({ activePanel }: { activePanel: DashboardPanel }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card p-2">
-      <nav className="flex min-w-max gap-1">
+    <div className="border-b border-border">
+      <nav className="-mb-px flex gap-0">
         {adminPanels.map((panel) => (
           <Link
             key={panel.id}
             href={`/dashboard?panel=${panel.id}`}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
               activePanel === panel.id
-                ? 'bg-fuel-green text-white shadow-sm'
-                : 'text-foreground hover:bg-muted/20'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
             {panel.label}
@@ -211,38 +213,57 @@ function DashboardOverview({
   phTimestamp: string
 }) {
   return (
-    <>
+    <div className="space-y-6">
       <PriceAutoRefresher />
       <NationalAveragePrices priceWeek={priceWeek} />
-
       <GaswatchSourcePanel stations={gaswatchStations} isAdmin={isAdmin} />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <DashboardAction href="/stations/nearby" icon="📍" title="Nearby Stations" description="Find stations close to you" />
-        <DashboardAction href="/validate" icon="✅" title="Validate Prices" description="Help confirm community reports" />
-        <DashboardAction href={`/profile/${session.uid}`} icon="🏆" title="My Contributions" description="View your report history" />
+      {/* Quick actions */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <DashboardAction
+          href="/stations/nearby"
+          icon="ri-map-pin-2-line"
+          title="Nearby Stations"
+          description="Find stations close to you"
+        />
+        <DashboardAction
+          href="/validate"
+          icon="ri-checkbox-circle-line"
+          title="Validate Prices"
+          description="Help confirm community reports"
+        />
+        <DashboardAction
+          href={`/profile/${session.uid}`}
+          icon="ri-trophy-line"
+          title="My Contributions"
+          description="View your report history"
+        />
       </div>
 
+      {/* Top contributors */}
       {contributors.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Contributors</CardTitle>
-          </CardHeader>
-          <div className="flex flex-col divide-y divide-border">
+        <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-border">
+            <h3 className="text-sm font-semibold text-foreground">Top Contributors</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Most confirmed price reports</p>
+          </div>
+          <div className="divide-y divide-border">
             {contributors.map((c, i) => (
-              <div key={c.uid || `contributor-${i}`} className="flex items-center gap-3 py-3">
-                <div className="w-6 text-center text-sm text-muted">{i + 1}</div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-foreground">{c.displayName ?? 'Anonymous'}</div>
-                  <div className="text-xs text-muted">{c.confirmedReportCount} confirmed reports</div>
+              <div key={c.uid || `contributor-${i}`} className="flex items-center gap-3 px-5 py-3">
+                <span className="w-5 text-sm font-medium tabular-nums text-muted-foreground">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground truncate">{c.displayName ?? 'Anonymous'}</div>
+                  <div className="text-xs text-muted-foreground">{c.confirmedReportCount} confirmed reports</div>
                 </div>
-                <div className="text-sm font-medium text-fuel-green">+{c.trustScore} pts</div>
+                <span className="inline-flex items-center rounded-md bg-[#f0fdf4] dark:bg-[#052e16] px-2 py-0.5 text-xs font-medium text-[#16a34a] ring-1 ring-inset ring-[#bbf7d0] dark:ring-[#14532d]">
+                  +{c.trustScore} pts
+                </span>
               </div>
             ))}
           </div>
-        </Card>
+        </div>
       )}
-    </>
+    </div>
   )
 }
 
@@ -263,60 +284,67 @@ const BRAND_LABELS: Record<string, string> = {
 function NationalAveragePrices({ priceWeek }: { priceWeek: GaswatchPriceWeek | null }) {
   if (!priceWeek) {
     return (
-      <Card>
-        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-          <CardTitle>National Average Prices</CardTitle>
-        </CardHeader>
-        <div className="rounded-lg border border-border bg-gray-50 p-4 text-sm text-muted">
-          No national average prices are available yet.
-        </div>
-      </Card>
+      <div className="rounded-lg border border-border bg-card shadow-sm p-5">
+        <h3 className="text-sm font-semibold text-foreground mb-1">National Average Prices</h3>
+        <p className="text-sm text-muted-foreground">No national average prices are available yet.</p>
+      </div>
     )
   }
 
   const brandEntries = Object.entries(priceWeek.brands)
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between">
         <div>
-          <CardTitle>National Average Prices</CardTitle>
-          <p className="mt-0.5 text-xs text-muted">Week of {priceWeek.label}</p>
+          <h3 className="text-sm font-semibold text-foreground">National Average Prices</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Week of {priceWeek.label}</p>
         </div>
-      </CardHeader>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />
+          Live
+        </span>
+      </div>
 
-      {/* National averages */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 mb-5">
-        <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 text-center">
-          <div className="text-2xl font-bold text-blue-700">{formatCurrency(priceWeek.dieselAvg)}</div>
-          <div className="mt-0.5 text-xs font-medium text-blue-500 uppercase tracking-wide">Diesel</div>
-          <div className="mt-0.5 text-[10px] text-blue-400">National Average</div>
+      {/* Diesel / Gasoline averages */}
+      <div className="grid grid-cols-2 divide-x divide-border">
+        <div className="px-5 py-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Diesel</p>
+          <p className="text-3xl font-semibold tabular-nums text-foreground">
+            {formatCurrency(priceWeek.dieselAvg)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">National average</p>
         </div>
-        <div className="rounded-xl bg-green-50 border border-green-100 p-4 text-center">
-          <div className="text-2xl font-bold text-fuel-green">{formatCurrency(priceWeek.unleadedAvg)}</div>
-          <div className="mt-0.5 text-xs font-medium text-green-600 uppercase tracking-wide">Gasoline</div>
-          <div className="mt-0.5 text-[10px] text-green-400">National Average</div>
+        <div className="px-5 py-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2">Gasoline</p>
+          <p className="text-3xl font-semibold tabular-nums text-[#16a34a]">
+            {formatCurrency(priceWeek.unleadedAvg)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">National average</p>
         </div>
       </div>
 
       {/* Per-brand breakdown */}
       {brandEntries.length > 0 && (
         <>
-          <div className="mb-2 text-xs font-semibold text-slate-500 uppercase tracking-wide">By Brand</div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="px-5 pb-2 pt-4 border-t border-border">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">By Brand</p>
+          </div>
+          <div className="px-5 pb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {brandEntries.map(([brand, prices]) => (
-              <div key={brand} className="rounded-lg border border-border bg-gray-50 p-3">
-                <div className="mb-2 text-xs font-semibold text-slate-700">
+              <div key={brand} className="rounded-md bg-muted border border-border p-3">
+                <p className="text-xs font-semibold text-foreground mb-2 truncate">
                   {BRAND_LABELS[brand] ?? brand.charAt(0).toUpperCase() + brand.slice(1)}
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-blue-500 font-medium">Diesel</span>
-                    <span className="font-semibold text-slate-800">{formatCurrency(prices.diesel)}</span>
+                </p>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Diesel</span>
+                    <span className="text-xs font-semibold tabular-nums text-foreground">{formatCurrency(prices.diesel)}</span>
                   </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-green-600 font-medium">Gasoline</span>
-                    <span className="font-semibold text-slate-800">{formatCurrency(prices.unleaded)}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Gas</span>
+                    <span className="text-xs font-semibold tabular-nums text-[#16a34a]">{formatCurrency(prices.unleaded)}</span>
                   </div>
                 </div>
               </div>
@@ -324,60 +352,89 @@ function NationalAveragePrices({ priceWeek }: { priceWeek: GaswatchPriceWeek | n
           </div>
         </>
       )}
-    </Card>
+    </div>
   )
 }
 
-function DashboardAction({ href, icon, title, description }: { href: string; icon: string; title: string; description: string }) {
+function DashboardAction({
+  href,
+  icon,
+  title,
+  description,
+}: {
+  href: string
+  icon: string
+  title: string
+  description: string
+}) {
   return (
     <Link href={href}>
-      <Card className="cursor-pointer transition-colors hover:border-fuel-green">
-        <div className="mb-2 text-2xl">{icon}</div>
-        <div className="font-semibold text-foreground">{title}</div>
-        <div className="text-sm text-muted">{description}</div>
-      </Card>
+      <div className="group rounded-lg border border-border bg-card p-5 shadow-sm transition-colors hover:bg-muted cursor-pointer">
+        <div className="flex items-start justify-between mb-3">
+          <div className="rounded-md bg-muted p-2">
+            <i className={`${icon} text-base text-muted-foreground`} />
+          </div>
+          <i className="ri-arrow-right-line text-sm text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" />
+        </div>
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
     </Link>
   )
 }
 
-function GaswatchSourcePanel({ stations, isAdmin }: { stations: GaswatchStation[] | null; isAdmin: boolean }) {
+function GaswatchSourcePanel({
+  stations,
+  isAdmin,
+}: {
+  stations: GaswatchStation[] | null
+  isAdmin: boolean
+}) {
   const stationCount = stations?.length ?? 0
   const pricedStations =
-    stations?.filter((station) => Object.values(station.prices).some((price) => typeof price === 'number')).length ?? 0
-  const brandCount = stations ? new Set(stations.map((station) => station.brand).filter(Boolean)).size : 0
+    stations?.filter((s) => Object.values(s.prices).some((p) => typeof p === 'number')).length ?? 0
+  const brandCount = stations ? new Set(stations.map((s) => s.brand).filter(Boolean)).size : 0
 
   return (
-    <Card className="bg-slate-950 text-white" padding="lg">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-green-200">Live Station Source</p>
-          <h3 className="mt-1 text-xl font-semibold">GasWatchPH station feed</h3>
-          <p className="mt-2 max-w-2xl text-sm text-slate-300">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">Live Price Feed</h3>
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#f0fdf4] dark:bg-[#052e16] px-2 py-0.5 text-xs font-medium text-[#16a34a] ring-1 ring-inset ring-[#bbf7d0] dark:ring-[#14532d]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />
+              Live
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
             {isAdmin
-              ? 'Live imported data is visible here while admin actions continue to write through Firebase.'
-              : 'Browse the imported station feed, then use nearby stations to compare live pump prices.'}
+              ? 'Live imported data. Admin actions write through Firebase.'
+              : 'Imported station feed. Compare with nearby stations for live pump prices.'}
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center sm:min-w-[360px]">
-          <SourceMetric label="Stations" value={stationCount} />
-          <SourceMetric label="With prices" value={pricedStations} />
-          <SourceMetric label="Brands" value={brandCount} />
-        </div>
       </div>
+
+      <div className="grid grid-cols-3 divide-x divide-border">
+        {[
+          { label: 'Stations', value: stationCount },
+          { label: 'With Prices', value: pricedStations },
+          { label: 'Brands', value: brandCount },
+        ].map(({ label, value }) => (
+          <div key={label} className="px-5 py-4 text-center">
+            <p className="text-2xl font-semibold tabular-nums text-foreground">{value.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+
       {stations === null && (
-        <div className="mt-4 rounded-lg border border-amber-300/40 bg-amber-300/10 p-3 text-sm text-amber-100">
-          GasWatchPH data is temporarily unavailable. Firebase-backed dashboard data remains available.
+        <div className="px-5 py-3 border-t border-[#fef3c7] dark:border-[#78350f] bg-[#fffbeb] dark:bg-[#1c1408]">
+          <p className="text-xs text-[#92400e] dark:text-[#fbbf24]">
+            <i className="ri-alert-line mr-1" />
+            Gastos data temporarily unavailable. Firebase data remains available.
+          </p>
         </div>
       )}
-    </Card>
-  )
-}
-
-function SourceMetric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg bg-white/10 p-3">
-      <div className="text-2xl font-semibold">{value.toLocaleString()}</div>
-      <div className="text-xs text-slate-300">{label}</div>
     </div>
   )
 }
@@ -393,34 +450,49 @@ function AdminPanelContent({
   stations: Awaited<ReturnType<typeof searchStations>>['stations']
   config: Awaited<ReturnType<typeof getSystemConfig>> | null
 }) {
+  const wrapperClass = 'rounded-lg border border-border bg-card shadow-sm overflow-hidden'
+  const headerClass = 'px-5 py-4 border-b border-border'
+  const titleClass = 'text-sm font-semibold text-foreground'
+  const bodyClass = 'p-5'
+
   if (activePanel === 'users') {
     return (
-      <Card padding="lg">
-        <CardHeader>
-          <CardTitle>User Management</CardTitle>
-        </CardHeader>
-        <UserManagementTable users={users} />
-      </Card>
+      <div className={wrapperClass}>
+        <div className={headerClass}>
+          <h3 className={titleClass}>User Management</h3>
+        </div>
+        <div className={bodyClass}>
+          <UserManagementTable users={users} />
+        </div>
+      </div>
     )
   }
 
   if (activePanel === 'stations') {
     return (
-      <Card padding="lg">
-        <CardHeader>
-          <CardTitle>Station Management</CardTitle>
-        </CardHeader>
-        <StationEditor stations={stations} />
-      </Card>
+      <div className={wrapperClass}>
+        <div className={headerClass}>
+          <h3 className={titleClass}>Station Management</h3>
+        </div>
+        <div className={bodyClass}>
+          <StationEditor stations={stations} />
+        </div>
+      </div>
     )
   }
 
   return (
-    <Card padding="lg">
-      <CardHeader>
-        <CardTitle>System Config</CardTitle>
-      </CardHeader>
-      {config ? <SystemConfigForm config={config} /> : <p className="text-sm text-muted">System config is unavailable.</p>}
-    </Card>
+    <div className={wrapperClass}>
+      <div className={headerClass}>
+        <h3 className={titleClass}>System Config</h3>
+      </div>
+      <div className={bodyClass}>
+        {config ? (
+          <SystemConfigForm config={config} />
+        ) : (
+          <p className="text-sm text-muted-foreground">System config is unavailable.</p>
+        )}
+      </div>
+    </div>
   )
 }
