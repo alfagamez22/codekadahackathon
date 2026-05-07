@@ -2,6 +2,7 @@ import 'server-only'
 
 export const DEFAULT_GASWATCHPH_DATA_URL = 'https://gaswatchph.com/js/data.js?v=20260505a'
 const GAS_STATIONS_MARKER = 'const GAS_STATIONS'
+const BRANDS_MARKER = 'const BRANDS'
 const PRICE_HISTORY_MARKER = 'const PRICE_HISTORY'
 
 export type GaswatchPriceMap = Record<string, number | null>
@@ -14,6 +15,13 @@ export type GaswatchStation = {
   lat: number
   lng: number
   prices: GaswatchPriceMap
+}
+
+export type GaswatchBrandMeta = {
+  name: string
+  short: string
+  color: string
+  textColor?: string
 }
 
 export type GaswatchBrandPrices = {
@@ -94,6 +102,66 @@ export function extractJsonArray(source: string, marker = GAS_STATIONS_MARKER) {
 
 export function parseGaswatchStations(source: string) {
   return JSON.parse(extractJsonArray(source)) as GaswatchStation[]
+}
+
+export function extractJsObject(source: string, marker: string) {
+  const markerIndex = source.indexOf(marker)
+  if (markerIndex === -1) {
+    throw new Error(`${marker} marker not found in payload.`)
+  }
+
+  const objectStart = source.indexOf('{', markerIndex)
+  if (objectStart === -1) {
+    throw new Error(`${marker} object start not found in payload.`)
+  }
+
+  let depth = 0
+  let inString = false
+  let quoteChar = ''
+
+  for (let i = objectStart; i < source.length; i += 1) {
+    const char = source[i]
+
+    if (inString) {
+      if (char === '\\') {
+        i += 1
+        continue
+      }
+      if (char === quoteChar) {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"' || char === "'") {
+      inString = true
+      quoteChar = char
+      continue
+    }
+
+    if (char === '{') {
+      depth += 1
+      continue
+    }
+
+    if (char === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return source.slice(objectStart, i + 1)
+      }
+    }
+  }
+
+  throw new Error(`${marker} object could not be parsed from payload.`)
+}
+
+export function parseGaswatchBrands(source: string): Record<string, GaswatchBrandMeta> {
+  try {
+    const raw = extractJsObject(source, BRANDS_MARKER)
+    return JSON.parse(normalizeJsToJson(raw)) as Record<string, GaswatchBrandMeta>
+  } catch {
+    return {}
+  }
 }
 
 /**

@@ -25,6 +25,16 @@ type GaswatchStation = {
 
 type GaswatchStationWithDistance = GaswatchStation & { distanceKm?: number }
 type Coordinates = { lat: number; lng: number }
+type TravelMode = 'ROUNDABOUT' | 'ONE_WAY' | 'TURNOVER'
+type StopInsertionMode = 'AUTO' | 'OUTBOUND_STOP' | 'INBOUND_STOP'
+type FuelConsumptionUnit = 'km/L' | 'L/100km' | 'L/km'
+type GaswatchBrandMeta = {
+  name?: string
+  short?: string
+  color?: string
+  textColor?: string
+}
+
 type VehicleProfile = {
   brand: string
   model: string
@@ -34,15 +44,23 @@ type VehicleProfile = {
   transmission: string
   fuelType: string
 }
-type ChatMessage = { role: 'user' | 'assistant'; content: string }
-type AiStationSummary = {
+
+type StationDecision = {
   id: string
   name: string
   brand: string | null
-  area?: string
-  distanceKm?: number
-  etaMinutes: number | null
-  prices: GaswatchPriceMap
+  distanceKm: number
+  etaMinutes: number
+  stationPrice: number
+  objectiveCost: number
+  travelFuelCost: number
+  timeCost: number
+  deltaD: number
+  deltaT: number
+  netSavings: number
+  feasible: boolean
+  infeasibleReason?: string
+  stopMode?: Exclude<StopInsertionMode, 'AUTO'>
 }
 
 const GASWATCH_RADIUS_KM = 5
@@ -51,8 +69,18 @@ const DEFAULT_PROVINCE = 'NCR'
 const PRICE_ORDER = ['diesel', 'premiumDiesel', 'unleaded', 'egasoline', 'premium95', 'premium97', 'kerosene']
 const TRINOMA_COORDS: Coordinates = { lat: 14.6528, lng: 121.0329 }
 const TRINOMA_LABEL = 'Trinoma, Quezon City'
-const ETA_TOP_COUNT = 10
+const MAKATI_COORDS: Coordinates = { lat: 14.5547, lng: 121.0244 }
+const MAKATI_LABEL = 'Makati CBD'
 const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY ?? ''
+const DEFAULT_TARGET_FUEL_LITERS = 40
+const DEFAULT_FUEL_CONSUMPTION_VALUE = 8 // km/L
+const DEFAULT_FUEL_CONSUMPTION_UNIT: FuelConsumptionUnit = 'km/L'
+const DEFAULT_TIME_VALUE_PHP_PER_MIN = 2
+const DEFAULT_CURRENT_FUEL_LITERS = 12
+const DEFAULT_RESERVE_FUEL_LITERS = 2
+const DEFAULT_TANK_CAPACITY_LITERS = 45
+const ROUTE_CORRIDOR_KM = 2
+const ESTIMATED_SPEED_KPH = 30
 
 const VEHICLE_MODELS: Record<string, Record<string, string[]>> = {
   Toyota: {
@@ -110,6 +138,45 @@ const getDistanceKm = (from: { lat: number; lng: number }, to: { lat: number; ln
   return earthRadiusKm * c
 }
 
+const estimateMinutesForDistance = (distanceKm: number) => {
+  if (distanceKm <= 0) return 0
+  return Math.max(1, Math.round((distanceKm / ESTIMATED_SPEED_KPH) * 60))
+}
+
+const projectToPlane = (coords: Coordinates) => {
+  const x = coords.lng * 111.32 * Math.cos(toRadians(coords.lat))
+  const y = coords.lat * 110.574
+  return { x, y }
+}
+
+const distancePointToSegmentKm = (point: Coordinates, start: Coordinates, end: Coordinates) => {
+  const p = projectToPlane(point)
+  const a = projectToPlane(start)
+  const b = projectToPlane(end)
+
+  const abx = b.x - a.x
+  const aby = b.y - a.y
+  const apx = p.x - a.x
+  const apy = p.y - a.y
+  const abLengthSquared = abx * abx + aby * aby
+  if (abLengthSquared === 0) return Math.hypot(apx, apy)
+
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / abLengthSquared))
+  const closestX = a.x + t * abx
+  const closestY = a.y + t * aby
+  return Math.hypot(p.x - closestX, p.y - closestY)
+}
+
+const normalizeFuelConsumption = (value: number, unit: FuelConsumptionUnit): number => {
+  if (value <= 0) return 0.1
+  switch (unit) {
+    case 'km/L': return 1 / value
+    case 'L/100km': return value / 100
+    case 'L/km': return value
+    default: return value
+  }
+}
+
 const getLowestPrice = (prices: GaswatchPriceMap) => {
   const values = Object.values(prices).filter((value): value is number => typeof value === 'number')
   return values.length > 0 ? Math.min(...values) : null
@@ -147,13 +214,25 @@ const getPriceEntries = (prices: GaswatchPriceMap) => {
 }
 
 export default function NearbyPage() {
-  const { coords, loading: geoLoading, error: geoError, requestLocation, statusMessage, permission } = useGeolocation({ auto: true })
+  const { coords, heading, loading: geoLoading, error: geoError, requestLocation, statusMessage, permission } = useGeolocation({ auto: true })
   const [locationMode, setLocationMode] = useState<'demo' | 'device'>('device')
-  const [nearbyOnly, setNearbyOnly] = useState(false)
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
   const [etaByStationId, setEtaByStationId] = useState<Record<string, number | null>>({})
+  const [routeByStationId, setRouteByStationId] = useState<Record<string, Array<[number, number]> | Array<Array<[number, number]>> | null>>({})
   const [etaLoading, setEtaLoading] = useState(false)
   const [showUserMarker, setShowUserMarker] = useState(true)
+  const [targetFuelLiters, setTargetFuelLiters] = useState(DEFAULT_TARGET_FUEL_LITERS)
+  const [fuelConsumptionValue, setFuelConsumptionValue] = useState(DEFAULT_FUEL_CONSUMPTION_VALUE)
+  const [fuelConsumptionUnit, setFuelConsumptionUnit] = useState<FuelConsumptionUnit>(DEFAULT_FUEL_CONSUMPTION_UNIT)
+  const [timeValuePhpPerMin, setTimeValuePhpPerMin] = useState(DEFAULT_TIME_VALUE_PHP_PER_MIN)
+  const [travelMode, setTravelMode] = useState<TravelMode>('ROUNDABOUT')
+  const [stopInsertionMode, setStopInsertionMode] = useState<StopInsertionMode>('AUTO')
+  const [destinationCoords, setDestinationCoords] = useState<Coordinates | null>(MAKATI_COORDS)
+  const [homeCoords, setHomeCoords] = useState<Coordinates | null>(null)
+  const [currentFuelLiters, setCurrentFuelLiters] = useState(DEFAULT_CURRENT_FUEL_LITERS)
+  const [reserveFuelLiters, setReserveFuelLiters] = useState(DEFAULT_RESERVE_FUEL_LITERS)
+  const [tankCapacityLiters, setTankCapacityLiters] = useState(DEFAULT_TANK_CAPACITY_LITERS)
+  const [selectedFuelType, setSelectedFuelType] = useState<string>('diesel')
   const [vehicleProfile, setVehicleProfile] = useState<VehicleProfile | null>(null)
   const [isCarModalOpen, setIsCarModalOpen] = useState(false)
   const [carBrand, setCarBrand] = useState('')
@@ -163,10 +242,6 @@ export default function NearbyPage() {
   const [carEngineDisplacement, setCarEngineDisplacement] = useState('')
   const [carTransmission, setCarTransmission] = useState('')
   const [carFuelType, setCarFuelType] = useState('')
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
   const {
     data: gaswatchData,
     isLoading: gaswatchLoading,
@@ -179,7 +254,7 @@ export default function NearbyPage() {
       if (!res.ok) {
         throw new Error('Failed to load GasWatchPH stations.')
       }
-      return res.json() as Promise<{ stations: GaswatchStation[] }>
+      return res.json() as Promise<{ stations: GaswatchStation[]; brands?: Record<string, GaswatchBrandMeta> }>
     },
   })
 
@@ -219,12 +294,16 @@ export default function NearbyPage() {
       setCarEngineDisplacement(parsed.engineDisplacementLiters ?? '')
       setCarTransmission(parsed.transmission ?? '')
       setCarFuelType(parsed.fuelType ?? '')
+      const normalizedFuel = (parsed.fuelType ?? '').toLowerCase()
+      if (normalizedFuel.includes('diesel')) setSelectedFuelType('diesel')
+      else setSelectedFuelType('unleaded')
     } catch {
       return
     }
   }, [])
 
   const gaswatchStations = useMemo(() => gaswatchData?.stations ?? [], [gaswatchData?.stations])
+  const gaswatchBrands = useMemo(() => gaswatchData?.brands ?? {}, [gaswatchData?.brands])
   const activeCoords = locationMode === 'demo' ? TRINOMA_COORDS : coords
   const hasActiveCoords = activeCoords != null
   const stationsWithDistance = useMemo<GaswatchStationWithDistance[]>(() => {
@@ -237,14 +316,14 @@ export default function NearbyPage() {
   }, [activeCoords, gaswatchStations])
 
   const displayedStations = useMemo(() => {
-    if (!nearbyOnly || !activeCoords) {
-      return [...stationsWithDistance].sort((a, b) => a.name.localeCompare(b.name))
+    if (!activeCoords) {
+      return []
     }
 
     return stationsWithDistance
       .filter((station) => (station.distanceKm ?? 0) <= GASWATCH_RADIUS_KM)
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-  }, [activeCoords, nearbyOnly, stationsWithDistance])
+  }, [activeCoords, stationsWithDistance])
 
   const mapStations = useMemo<(StationListItem & { prices?: GaswatchPriceMap })[]>(() => {
     return displayedStations.map((station) => ({
@@ -272,7 +351,6 @@ export default function NearbyPage() {
     return [...displayedStations]
       .filter((station) => typeof station.distanceKm === 'number')
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-      .slice(0, ETA_TOP_COUNT)
   }, [displayedStations, hasActiveCoords])
 
   const etaStationsKey = useMemo(() => {
@@ -283,26 +361,10 @@ export default function NearbyPage() {
     return new Set(etaStations.map((station) => String(station.id)))
   }, [etaStations])
 
-  const aiStations = useMemo<AiStationSummary[]>(() => {
-    if (!activeCoords) return []
-    return [...stationsWithDistance]
-      .filter((station) => typeof station.distanceKm === 'number')
-      .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-      .slice(0, ETA_TOP_COUNT)
-      .map((station) => ({
-        id: String(station.id),
-        name: station.name,
-        brand: station.brand ?? null,
-        area: station.area,
-        distanceKm: station.distanceKm,
-        etaMinutes: etaByStationId[String(station.id)] ?? null,
-        prices: station.prices,
-      }))
-  }, [activeCoords, etaByStationId, stationsWithDistance])
-
   useEffect(() => {
     if (!activeCoords || etaStations.length === 0 || !GEOAPIFY_API_KEY) {
       setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+      setRouteByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
       setEtaLoading(false)
       return
     }
@@ -319,21 +381,24 @@ export default function NearbyPage() {
             )
 
             if (!response.ok) {
-              return { id: String(station.id), etaMinutes: null }
+              return { id: String(station.id), etaMinutes: null, coordinates: null }
             }
 
             const data = (await response.json()) as GeoapifyRouteResponse
             const route = data.features?.[0]
             const etaMinutes = route ? Math.round((route.properties.time || 0) / 60) : null
-            return { id: String(station.id), etaMinutes }
+            const coordinates = route?.geometry?.coordinates ?? null
+            return { id: String(station.id), etaMinutes, coordinates }
           })
         )
 
         if (cancelled) return
 
         const next: Record<string, number | null> = {}
+        const nextRoutes: Record<string, Array<[number, number]> | Array<Array<[number, number]>> | null> = {}
         results.forEach((result) => {
           next[result.id] = result.etaMinutes
+          nextRoutes[result.id] = result.coordinates
         })
         setEtaByStationId((prev) => {
           const prevKeys = Object.keys(prev)
@@ -344,10 +409,12 @@ export default function NearbyPage() {
           }
           return prev
         })
+        setRouteByStationId(nextRoutes)
       } catch (err) {
         if (!cancelled) {
           console.error('ETA calculation failed:', err)
           setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+          setRouteByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
         }
       } finally {
         if (!cancelled) setEtaLoading(false)
@@ -370,10 +437,6 @@ export default function NearbyPage() {
   const handleUseDemoLocation = () => {
     setLocationMode('demo')
     setShowUserMarker(true)
-  }
-
-  const handleToggleNearby = () => {
-    setNearbyOnly((prev) => !prev)
   }
 
   const handleOpenCarModal = () => {
@@ -435,45 +498,172 @@ export default function NearbyPage() {
       carFuelType
   )
 
-  const aiContext = useMemo(() => {
-    return {
-      location: locationLabel,
-      vehicle: vehicleProfile,
-      stations: aiStations,
-    }
-  }, [aiStations, locationLabel, vehicleProfile])
+  const modeledStations = useMemo<StationDecision[]>(() => {
+    const consumptionLPerKm = normalizeFuelConsumption(fuelConsumptionValue, fuelConsumptionUnit)
+    const originCoords = activeCoords ?? TRINOMA_COORDS
+    const destination = destinationCoords
+    const home = homeCoords ?? originCoords
 
-  const handleSendChat = async () => {
-    const trimmed = chatInput.trim()
-    if (!trimmed || chatLoading || aiStations.length === 0) return
-    const nextMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: trimmed }]
-    setChatMessages(nextMessages)
-    setChatInput('')
-    setChatError(null)
-    setChatLoading(true)
+    const scenarioCandidates = gaswatchStations.filter((station) => {
+      const stationCoords = { lat: station.lat, lng: station.lng }
+      const toOrigin = getDistanceKm(originCoords, stationCoords)
 
-    try {
-      const response = await fetch('/api/ai/station-recommendation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: nextMessages, context: aiContext }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(errorText || 'AI request failed')
+      if (travelMode === 'ROUNDABOUT') {
+        return toOrigin <= GASWATCH_RADIUS_KM
       }
 
-      const data = (await response.json()) as { reply?: string }
-      const reply = data.reply?.trim() || 'No response yet.'
-      setChatMessages((prev) => [...prev, { role: 'assistant', content: reply }])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'AI request failed'
-      setChatError(message)
-    } finally {
-      setChatLoading(false)
-    }
-  }
+      if (!destination) return false
+      if (travelMode === 'ONE_WAY') {
+        return distancePointToSegmentKm(stationCoords, originCoords, destination) <= ROUTE_CORRIDOR_KM
+      }
+
+      const onOutbound = distancePointToSegmentKm(stationCoords, originCoords, destination) <= ROUTE_CORRIDOR_KM
+      const onInbound = distancePointToSegmentKm(stationCoords, destination, home) <= ROUTE_CORRIDOR_KM
+      return onOutbound || onInbound
+    })
+
+    const entries = scenarioCandidates
+      .map((station) => {
+        const stationId = String(station.id)
+        const stationPrice = station.prices[selectedFuelType]
+        if (typeof stationPrice !== 'number') return null
+
+        const distanceKm = getDistanceKm(originCoords, { lat: station.lat, lng: station.lng })
+        const etaMinutes = etaByStationId[stationId] ?? estimateMinutesForDistance(distanceKm)
+
+        return {
+          id: stationId,
+          name: station.name,
+          brand: station.brand ?? null,
+          distanceKm,
+          etaMinutes,
+          stationPrice,
+          coords: { lat: station.lat, lng: station.lng }
+        }
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry != null)
+
+    if (entries.length === 0) return []
+
+    const pRef = entries.reduce((sum, entry) => sum + entry.stationPrice, 0) / entries.length
+
+    const scored = entries.map((entry) => {
+      let deltaD = 0
+      let deltaT = 0
+
+      const litersNeededToStation = entry.distanceKm * consumptionLPerKm
+      const usableFuelBeforeStop = Math.max(0, currentFuelLiters - reserveFuelLiters)
+      let feasible = litersNeededToStation <= usableFuelBeforeStop
+      let infeasibleReason: string | undefined
+      let chosenStopMode: Exclude<StopInsertionMode, 'AUTO'> | undefined
+      if (!feasible) {
+        infeasibleReason = 'Insufficient pre-refuel fuel to safely reach this station.'
+      }
+
+      if (targetFuelLiters > tankCapacityLiters) {
+        feasible = false
+        infeasibleReason = 'Requested fill exceeds configured tank capacity.'
+      }
+
+      if (travelMode === 'ROUNDABOUT') {
+        deltaD = entry.distanceKm * 2
+        deltaT = entry.etaMinutes * 2
+      } else if (travelMode === 'ONE_WAY' && destination) {
+        const distDirect = getDistanceKm(originCoords, destination)
+        const distToStation = entry.distanceKm
+        const distStationToDest = getDistanceKm(entry.coords, destination)
+        deltaD = Math.max(0, (distToStation + distStationToDest) - distDirect)
+
+        const etaDirect = estimateMinutesForDistance(distDirect)
+        const etaToStation = entry.etaMinutes
+        const etaStationToDest = estimateMinutesForDistance(distStationToDest)
+        deltaT = Math.max(0, (etaToStation + etaStationToDest) - etaDirect)
+      } else if (travelMode === 'TURNOVER' && destination) {
+        const directOutbound = getDistanceKm(originCoords, destination)
+        const directInbound = getDistanceKm(destination, home)
+        const baseDistance = directOutbound + directInbound
+        const baseEta = estimateMinutesForDistance(directOutbound) + estimateMinutesForDistance(directInbound)
+
+        const outboundDistanceWithStop =
+          getDistanceKm(originCoords, entry.coords) +
+          getDistanceKm(entry.coords, destination) +
+          directInbound
+        const inboundDistanceWithStop =
+          directOutbound +
+          getDistanceKm(destination, entry.coords) +
+          getDistanceKm(entry.coords, home)
+
+        const outboundDeltaD = Math.max(0, outboundDistanceWithStop - baseDistance)
+        const inboundDeltaD = Math.max(0, inboundDistanceWithStop - baseDistance)
+
+        const outboundEta =
+          entry.etaMinutes +
+          estimateMinutesForDistance(getDistanceKm(entry.coords, destination)) +
+          estimateMinutesForDistance(directInbound)
+        const inboundEta =
+          estimateMinutesForDistance(directOutbound) +
+          estimateMinutesForDistance(getDistanceKm(destination, entry.coords)) +
+          estimateMinutesForDistance(getDistanceKm(entry.coords, home))
+
+        const outboundDeltaT = Math.max(0, outboundEta - baseEta)
+        const inboundDeltaT = Math.max(0, inboundEta - baseEta)
+
+        const useOutbound = stopInsertionMode === 'OUTBOUND_STOP' || (stopInsertionMode === 'AUTO' && outboundDeltaD <= inboundDeltaD)
+        chosenStopMode = useOutbound ? 'OUTBOUND_STOP' : 'INBOUND_STOP'
+        deltaD = useOutbound ? outboundDeltaD : inboundDeltaD
+        deltaT = useOutbound ? outboundDeltaT : inboundDeltaT
+      }
+
+      const postRefuelTripKm = travelMode === 'ROUNDABOUT'
+        ? entry.distanceKm
+        : travelMode === 'ONE_WAY' && destination
+          ? getDistanceKm(entry.coords, destination)
+          : travelMode === 'TURNOVER' && destination
+            ? (chosenStopMode === 'INBOUND_STOP'
+              ? getDistanceKm(entry.coords, home)
+              : getDistanceKm(entry.coords, destination) + getDistanceKm(destination, home))
+            : 0
+
+      const postRefuelRequiredLiters = postRefuelTripKm * consumptionLPerKm + reserveFuelLiters
+      if (postRefuelRequiredLiters > targetFuelLiters && feasible) {
+        feasible = false
+        infeasibleReason = 'Target fill may be insufficient for the remaining trip plus reserve.'
+      }
+
+      const travelFuelCost = deltaD * consumptionLPerKm * pRef
+      const timeCost = deltaT * timeValuePhpPerMin
+      const gasCost = targetFuelLiters * entry.stationPrice
+      const objectiveCost = gasCost + travelFuelCost + timeCost
+
+      const grossSavings = targetFuelLiters * (pRef - entry.stationPrice)
+      const netSavings = grossSavings - travelFuelCost - timeCost
+
+      return {
+        ...entry,
+        objectiveCost,
+        travelFuelCost,
+        timeCost,
+        deltaD,
+        deltaT,
+        netSavings,
+        feasible,
+        infeasibleReason,
+        stopMode: chosenStopMode,
+      }
+    })
+
+    return scored.sort((a, b) => {
+      if (a.feasible !== b.feasible) return a.feasible ? -1 : 1
+      return a.objectiveCost - b.objectiveCost
+    })
+  }, [activeCoords, currentFuelLiters, destinationCoords, etaByStationId, fuelConsumptionUnit, fuelConsumptionValue, gaswatchStations, homeCoords, reserveFuelLiters, selectedFuelType, stopInsertionMode, tankCapacityLiters, targetFuelLiters, timeValuePhpPerMin, travelMode])
+
+  const feasibleStations = modeledStations.filter((station) => station.feasible)
+  const bestStation = feasibleStations[0] ?? null
+  const nextBestStation = feasibleStations[1] ?? null
+  const savingsVsNext = bestStation && nextBestStation ? nextBestStation.objectiveCost - bestStation.objectiveCost : null
+  const highlightedStationId = bestStation ? `gaswatch-${bestStation.id}` : null
+  const activeRouteCoordinates = bestStation ? routeByStationId[String(bestStation.id)] : null
 
   return (
     <div>
@@ -485,30 +675,18 @@ export default function NearbyPage() {
         <div>
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <Button
-              variant={nearbyOnly ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={handleToggleNearby}
-              aria-pressed={nearbyOnly}
-            >
-              {nearbyOnly ? 'Nearby only: On' : 'Nearby only: Off'}
-            </Button>
-            <Button
               variant="primary"
               size="sm"
               onClick={handleOpenCarModal}
             >
               {vehicleProfile ? 'Edit car' : 'Set car'}
             </Button>
-            <div className="text-xs text-muted-foreground">
-              {nearbyOnly
-                ? 'Showing all stations within 5 km.'
-                : 'Showing all stations from GasWatchPH.'}
-            </div>
+            <div className="text-xs text-muted-foreground">Showing all stations within 5 km of your location.</div>
           </div>
 
           <div className="mb-6 grid gap-2 rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground sm:grid-cols-4">
             <div>
-              <span className="font-medium text-foreground">Mode:</span> {nearbyOnly ? 'Nearby only' : 'All stations'}
+              <span className="font-medium text-foreground">Mode:</span> Nearby only (5 km)
             </div>
             <div>
               <span className="font-medium text-foreground">Location:</span> {locationLabel}
@@ -636,14 +814,18 @@ export default function NearbyPage() {
             <div className="relative">
               <StationMap
                 stations={mapStations}
+                brandStyles={gaswatchBrands}
                 userLat={activeCoords?.lat}
                 userLng={activeCoords?.lng}
+                userHeading={locationMode === 'device' ? heading : null}
                 showUserMarker={showUserMarker}
                 centerOnUser={locationMode === 'device' && !!coords}
+                highlightStationId={highlightedStationId}
                 onStationSelect={setSelectedStationId}
                 showMarkerPopup={false}
                 containerClassName="-mx-4 sm:-mx-6 lg:-mx-8 z-0"
                 mapClassName="h-80 sm:h-[520px] lg:h-[620px]"
+                routeCoordinates={activeRouteCoordinates}
               />
               {selectedStation && (
                 <div className="absolute left-1/2 top-4 z-10 w-[90%] max-w-md -translate-x-1/2 rounded-xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur">
@@ -740,12 +922,12 @@ export default function NearbyPage() {
           )}
         </div>
 
-        <aside className="h-fit rounded-xl border border-border bg-card p-4 lg:sticky lg:top-24">
+        <aside className="h-fit max-h-[calc(100vh-8rem)] overflow-y-auto rounded-xl border border-border bg-card p-4 lg:sticky lg:top-24">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold text-foreground">AI Station Advisor</div>
+              <div className="text-sm font-semibold text-foreground">Smart Station Optimizer</div>
               <div className="text-xs text-muted-foreground">
-                Uses top {aiStations.length} nearby stations and your vehicle profile.
+                Automatic ranking based on fuel price, ETA, distance, and route behavior.
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={handleOpenCarModal}>
@@ -755,57 +937,243 @@ export default function NearbyPage() {
 
           <div className="mt-4 rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
             <div><span className="font-medium text-foreground">Location:</span> {locationLabel}</div>
-            <div><span className="font-medium text-foreground">Stations:</span> {aiStations.length}</div>
+            <div><span className="font-medium text-foreground">Candidates:</span> {modeledStations.length} {travelMode === 'ROUNDABOUT' ? '(within 5km)' : '(route corridor)'}</div>
             <div><span className="font-medium text-foreground">Vehicle:</span> {vehicleProfile ? 'Set' : 'Not set'}</div>
           </div>
 
-          <div className="mt-4 max-h-[50vh] overflow-y-auto rounded-lg border border-border bg-background p-3">
-            {chatMessages.length === 0 ? (
-              <div className="text-xs text-muted-foreground">
-                Ask the AI to pick the best station based on price, ETA, and your vehicle profile.
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {chatMessages.map((message, index) => (
-                  <div
-                    key={`${message.role}-${index}`}
-                    className={`rounded-lg px-3 py-2 text-xs ${message.role === 'user' ? 'bg-fuel-green text-white ml-auto' : 'bg-muted/40 text-foreground'}`}
-                  >
-                    {message.content}
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-foreground">Thinking...</div>
-                )}
-              </div>
+          <div className="mt-4 grid gap-3 rounded-lg border border-border bg-background p-3 text-xs">
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Travel Purpose
+              <select
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={travelMode}
+                onChange={(event) => setTravelMode(event.target.value as TravelMode)}
+              >
+                <option value="ROUNDABOUT">Refuel and return home</option>
+                <option value="ONE_WAY">Refuel on the way to destination</option>
+                <option value="TURNOVER">Refuel for destination & return home</option>
+              </select>
+            </label>
+
+            {travelMode !== 'ROUNDABOUT' && (
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Destination (Mock Coords)
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                    value={destinationCoords?.lat ?? ''}
+                    onChange={(e) => setDestinationCoords(prev => prev ? ({ ...prev, lat: Number(e.target.value) }) : { lat: Number(e.target.value), lng: 121.0244 })}
+                    placeholder="Lat"
+                  />
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                    value={destinationCoords?.lng ?? ''}
+                    onChange={(e) => setDestinationCoords(prev => prev ? ({ ...prev, lng: Number(e.target.value) }) : { lat: 14.5547, lng: Number(e.target.value) })}
+                    placeholder="Lng"
+                  />
+                </div>
+              </label>
             )}
+
+            {travelMode === 'TURNOVER' && (
+              <>
+                <label className="flex flex-col gap-1 text-muted-foreground">
+                  Turnover stop insertion
+                  <select
+                    className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                    value={stopInsertionMode}
+                    onChange={(event) => setStopInsertionMode(event.target.value as StopInsertionMode)}
+                  >
+                    <option value="AUTO">Auto (least detour)</option>
+                    <option value="OUTBOUND_STOP">Outbound stop</option>
+                    <option value="INBOUND_STOP">Inbound stop</option>
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1 text-muted-foreground">
+                  Home return point (optional)
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                      value={homeCoords?.lat ?? ''}
+                      onChange={(e) => setHomeCoords(prev => prev ? ({ ...prev, lat: Number(e.target.value) }) : { lat: Number(e.target.value), lng: activeCoords?.lng ?? 121.0329 })}
+                      placeholder="Home lat"
+                    />
+                    <input
+                      type="number"
+                      step="0.0001"
+                      className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                      value={homeCoords?.lng ?? ''}
+                      onChange={(e) => setHomeCoords(prev => prev ? ({ ...prev, lng: Number(e.target.value) }) : { lat: activeCoords?.lat ?? 14.6528, lng: Number(e.target.value) })}
+                      placeholder="Home lng"
+                    />
+                  </div>
+                </label>
+              </>
+            )}
+
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Fuel type
+              <select
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={selectedFuelType}
+                onChange={(event) => setSelectedFuelType(event.target.value)}
+              >
+                {PRICE_ORDER.map((fuelType) => (
+                  <option key={fuelType} value={fuelType}>
+                    {formatGaswatchFuel(fuelType)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              F (liters to fill)
+              <input
+                type="number"
+                min="1"
+                step="1"
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={targetFuelLiters}
+                onChange={(event) => setTargetFuelLiters(Number(event.target.value) || DEFAULT_TARGET_FUEL_LITERS)}
+              />
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Fuel Consumption
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.1"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={fuelConsumptionValue}
+                  onChange={(event) => setFuelConsumptionValue(Number(event.target.value) || DEFAULT_FUEL_CONSUMPTION_VALUE)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Unit
+                <select
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={fuelConsumptionUnit}
+                  onChange={(event) => setFuelConsumptionUnit(event.target.value as FuelConsumptionUnit)}
+                >
+                  <option value="km/L">km/L</option>
+                  <option value="L/100km">L/100km</option>
+                  <option value="L/km">L/km</option>
+                </select>
+              </label>
+            </div>
+
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Vt (PHP/min time value)
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={timeValuePhpPerMin}
+                onChange={(event) => setTimeValuePhpPerMin(Number(event.target.value) || DEFAULT_TIME_VALUE_PHP_PER_MIN)}
+              />
+            </label>
+
+            <div className="grid grid-cols-3 gap-2">
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Current fuel (L)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={currentFuelLiters}
+                  onChange={(event) => setCurrentFuelLiters(Number(event.target.value) || DEFAULT_CURRENT_FUEL_LITERS)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Reserve (L)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={reserveFuelLiters}
+                  onChange={(event) => setReserveFuelLiters(Number(event.target.value) || DEFAULT_RESERVE_FUEL_LITERS)}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-muted-foreground">
+                Tank cap (L)
+                <input
+                  type="number"
+                  min="10"
+                  step="1"
+                  className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                  value={tankCapacityLiters}
+                  onChange={(event) => setTankCapacityLiters(Number(event.target.value) || DEFAULT_TANK_CAPACITY_LITERS)}
+                />
+              </label>
+            </div>
           </div>
 
-          {chatError && (
-            <div className="mt-2 text-xs text-fuel-red">{chatError}</div>
-          )}
+          <div className="mt-3 rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
+            <div className="font-medium text-foreground">Dynamic Objective function</div>
+            <div className="mt-1 font-mono text-[10px]">J_i = (F * P_i) + (ΔD_i * C * P_ref) + (ΔT_i * V_t)</div>
+            <div className="mt-1 text-[10px]">ΔD: Marginal dist | ΔT: Marginal time</div>
+          </div>
 
-          <div className="mt-3">
-            <textarea
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-              rows={3}
-              placeholder="Ask: Which station is best for my car today?"
-              value={chatInput}
-              onChange={(event) => setChatInput(event.target.value)}
-            />
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleSendChat}
-                disabled={chatLoading || !chatInput.trim() || aiStations.length === 0}
-              >
-                Ask AI
-              </Button>
-              <div className="text-[11px] text-muted-foreground">
-                {aiStations.length === 0 ? 'No nearby stations available yet.' : 'Uses top 10 nearby stations.'}
+          <div className="mt-3 max-h-[40vh] overflow-y-auto rounded-lg border border-border bg-background p-3 text-xs">
+            {bestStation ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-fuel-green/30 bg-fuel-green/10 p-3">
+                  <div className="font-semibold text-foreground">Recommended: {bestStation.name}</div>
+                  <div className="text-muted-foreground">
+                    J* = PHP {bestStation.objectiveCost.toFixed(2)} | ΔT {bestStation.deltaT} min | ΔD {bestStation.deltaD.toFixed(2)} km
+                  </div>
+                  {bestStation.stopMode && (
+                    <div className="mt-1 text-muted-foreground">Turnover insertion: {bestStation.stopMode === 'OUTBOUND_STOP' ? 'Outbound' : 'Inbound'}</div>
+                  )}
+                  {savingsVsNext != null && savingsVsNext > 0 && (
+                    <div className="mt-1 text-fuel-green font-medium">Net Savings vs next option: PHP {savingsVsNext.toFixed(2)}</div>
+                  )}
+                  {bestStation.netSavings < 0 && (
+                    <div className="mt-1 text-fuel-red font-medium">Note: Refuel cost outweighs detour savings.</div>
+                  )}
+                </div>
+
+                {feasibleStations.slice(0, 5).map((decision, index) => (
+                  <div key={decision.id} className="rounded-lg border border-border p-2">
+                    <div className="font-medium text-foreground">#{index + 1} {decision.name}</div>
+                    <div className="text-muted-foreground">
+                      J_i PHP {decision.objectiveCost.toFixed(2)} = fuel PHP {(targetFuelLiters * decision.stationPrice).toFixed(2)} + detour PHP {decision.travelFuelCost.toFixed(2)} + time PHP {decision.timeCost.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+
+                {modeledStations.filter((entry) => !entry.feasible).slice(0, 3).map((entry) => (
+                  <div key={`infeasible-${entry.id}`} className="rounded-lg border border-fuel-red/30 bg-fuel-red-light p-2 text-fuel-red">
+                    <div className="font-medium">{entry.name} excluded</div>
+                    <div>{entry.infeasibleReason ?? 'This station is currently not feasible for your fuel constraints.'}</div>
+                  </div>
+                ))}
               </div>
-            </div>
+            ) : null}
+            {!bestStation && (
+              <div className="text-muted-foreground">No eligible stations with {formatGaswatchFuel(selectedFuelType)} pricing found within 5 km yet.</div>
+            )}
+            {bestStation && nextBestStation == null && (
+              <div className="text-muted-foreground">Only one station currently has the required pricing for this fuel type.</div>
+            )}
+            {!GEOAPIFY_API_KEY && (
+              <div className="text-fuel-red">Set NEXT_PUBLIC_GEOAPIFY_API_KEY to enable live ETA in the objective function.</div>
+            )}
+            {etaLoading && (
+              <div className="text-muted-foreground">Refreshing ETA and objective score...</div>
+            )}
           </div>
         </aside>
       </div>

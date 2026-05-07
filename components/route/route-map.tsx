@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type * as Leaflet from 'leaflet'
 import type { RouteInfo } from '@/types/route'
+import type { NearbyStation } from './route-planner'
 
 interface RouteMapProps {
   route: RouteInfo | null
   loading?: boolean
+  nearbyStations?: NearbyStation[]
 }
 
 type RouteCoordinates = Array<[number, number]> | Array<Array<[number, number]>>
@@ -35,10 +37,12 @@ function normalizeRouteCoordinates(coords: RouteCoordinates | unknown): Array<[n
   return []
 }
 
-export function RouteMap({ route, loading }: RouteMapProps) {
+export function RouteMap({ route, loading, nearbyStations = [] }: RouteMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [mapReady, setMapReady] = useState(false)
   const mapInstanceRef = useRef<Leaflet.Map | null>(null)
+  const leafletRef = useRef<typeof Leaflet | null>(null)
+  const stationLayerRef = useRef<Leaflet.LayerGroup | null>(null)
 
   useEffect(() => {
     if (!mapRef.current || !route) return
@@ -47,6 +51,7 @@ export function RouteMap({ route, loading }: RouteMapProps) {
     async function initMap() {
       const L = (await import('leaflet')).default
       await import('leaflet/dist/leaflet.css')
+      leafletRef.current = L as unknown as typeof Leaflet
 
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove()
@@ -109,6 +114,9 @@ export function RouteMap({ route, loading }: RouteMapProps) {
         map.fitBounds(fallbackBounds, { padding: [50, 50] })
       }
 
+      // Station marker layer
+      stationLayerRef.current = L.layerGroup().addTo(map)
+
       mapInstanceRef.current = map
       setMapReady(true)
     }
@@ -118,9 +126,69 @@ export function RouteMap({ route, loading }: RouteMapProps) {
     return () => {
       mapInstanceRef.current?.remove()
       mapInstanceRef.current = null
+      stationLayerRef.current = null
+      leafletRef.current = null
       setMapReady(false)
     }
   }, [route])
+
+  useEffect(() => {
+    const L = leafletRef.current as typeof import('leaflet') | null
+    const layer = stationLayerRef.current
+    if (!L || !layer || !mapReady) return
+
+    layer.clearLayers()
+
+    const PRICE_ORDER = ['diesel', 'premiumDiesel', 'unleaded', 'egasoline', 'premium95', 'premium97', 'kerosene']
+    const FUEL_LABELS: Record<string, string> = {
+      diesel: 'Diesel',
+      premiumDiesel: 'Premium Diesel',
+      unleaded: 'Unleaded 91',
+      egasoline: 'E-Gasoline',
+      premium95: 'Premium 95',
+      premium97: 'Premium 97',
+      kerosene: 'Kerosene',
+    }
+
+    for (const station of nearbyStations) {
+      const entries = Object.entries(station.prices)
+        .filter(([, v]) => typeof v === 'number')
+        .map(([fuelType, value]) => ({ fuelType, price: value as number }))
+        .sort((a, b) => {
+          const ai = PRICE_ORDER.indexOf(a.fuelType)
+          const bi = PRICE_ORDER.indexOf(b.fuelType)
+          if (ai === -1 && bi === -1) return a.fuelType.localeCompare(b.fuelType)
+          if (ai === -1) return 1
+          if (bi === -1) return -1
+          return ai - bi
+        })
+
+      const priceRows = entries
+        .map(
+          (e) =>
+            `<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#888">${FUEL_LABELS[e.fuelType] ?? e.fuelType}</span><span style="font-weight:600">PHP ${e.price.toFixed(2)}</span></div>`
+        )
+        .join('')
+
+      const popupContent = `
+        <div style="min-width:160px;font-family:sans-serif;font-size:12px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:2px">${station.name}</div>
+          <div style="color:#888;margin-bottom:8px">${station.brand ?? 'Independent'}${station.area ? ` · ${station.area}` : ''}</div>
+          ${priceRows || '<div style="color:#888">No prices reported yet.</div>'}
+        </div>`
+
+      const stationIcon = (L as typeof import('leaflet')).divIcon({
+        html: '<div style="background:#f97316;color:white;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,.35)">&#9981;</div>',
+        className: '',
+        iconSize: [26, 26],
+        iconAnchor: [13, 26],
+      })
+
+      ;(L as typeof import('leaflet')).marker([station.lat, station.lng], { icon: stationIcon })
+        .addTo(layer)
+        .bindPopup(popupContent)
+    }
+  }, [nearbyStations, mapReady])
 
   return (
     <div className="relative min-h-[400px] overflow-hidden rounded-lg border border-border shadow-sm">
