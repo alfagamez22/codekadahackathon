@@ -1,17 +1,12 @@
 import { NextResponse } from 'next/server'
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
+
 const NCR_BBOX = {
   south: 14.36,
-<<<<<<< HEAD
   west: 120.9,
   north: 14.83,
   east: 121.2,
-=======
-  west: 120.90,
-  north: 14.83,
-  east: 121.20,
->>>>>>> 2321e2b4c04c270e04ec48f092a77eaa6b73d49a
 }
 
 const buildQuery = () => `
@@ -27,6 +22,7 @@ out center tags;
 export async function GET() {
   try {
     const body = new URLSearchParams({ data: buildQuery() })
+
     const response = await fetch(OVERPASS_URL, {
       method: 'POST',
       headers: {
@@ -41,11 +37,7 @@ export async function GET() {
     if (!response.ok) {
       return NextResponse.json(
         { message: `Failed to fetch station locations from Overpass (status ${response.status}).` },
-<<<<<<< HEAD
         { status: response.status },
-=======
-        { status: response.status }
->>>>>>> 2321e2b4c04c270e04ec48f092a77eaa6b73d49a
       )
     }
 
