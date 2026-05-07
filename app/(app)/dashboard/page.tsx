@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth/guards'
 import { getSystemStats, getTopContributors } from '@/lib/firebase-admin/queries/analytics'
 import { listUsers } from '@/lib/firebase-admin/queries/users'
 import { searchStations } from '@/lib/firebase-admin/queries/stations'
+import { listStationSubmissions } from '@/lib/firebase-admin/queries/station-submissions'
 import { getSystemConfig } from '@/lib/firebase-admin/firestore'
 import {
   fetchGaswatchScript,
@@ -62,12 +63,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
   const activePanel: DashboardPanel = isAdmin && isDashboardPanel(requestedPanel) ? requestedPanel : 'overview'
   const phTimestamp = getPhilippineTimestamp()
 
-  const [stats, contributors, gaswatchSnapshot, usersData, stationsData, config] = await Promise.all([
+  const [stats, contributors, gaswatchSnapshot, usersData, stationsData, stationSubmissions, config] = await Promise.all([
     getSystemStats(),
     getTopContributors(5),
     activePanel === 'overview' ? getGaswatchSnapshot() : Promise.resolve(null),
     isAdmin && activePanel === 'users' ? listUsers({}) : Promise.resolve(null),
     isAdmin && activePanel === 'stations' ? searchStations({}) : Promise.resolve(null),
+    isAdmin && activePanel === 'stations' ? listStationSubmissions({ status: 'pending', limit: 50 }) : Promise.resolve([]),
     isAdmin && activePanel === 'config' ? getSystemConfig() : Promise.resolve(null),
   ])
 
@@ -142,11 +144,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
           activePanel={activePanel}
           users={usersData?.users ?? []}
           stations={stationsData?.stations ?? []}
+          stationSubmissions={stationSubmissions}
           config={config}
         />
       ) : (
         <DashboardOverview
-          stats={stats}
           contributors={contributors}
           gaswatchStations={gaswatchStations}
           priceWeek={priceWeek}
@@ -196,7 +198,6 @@ function DashboardTabs({ activePanel }: { activePanel: DashboardPanel }) {
 }
 
 function DashboardOverview({
-  stats,
   contributors,
   gaswatchStations,
   priceWeek,
@@ -204,7 +205,6 @@ function DashboardOverview({
   isAdmin,
   phTimestamp,
 }: {
-  stats: Awaited<ReturnType<typeof getSystemStats>>
   contributors: Awaited<ReturnType<typeof getTopContributors>>
   gaswatchStations: GaswatchStation[] | null
   priceWeek: GaswatchPriceWeek | null
@@ -215,7 +215,7 @@ function DashboardOverview({
   return (
     <div className="space-y-6">
       <PriceAutoRefresher />
-      <NationalAveragePrices priceWeek={priceWeek} />
+      <NationalAveragePrices priceWeek={priceWeek} phTimestamp={phTimestamp} />
       <GaswatchSourcePanel stations={gaswatchStations} isAdmin={isAdmin} />
 
       {/* Quick actions */}
@@ -281,13 +281,20 @@ const BRAND_LABELS: Record<string, string> = {
   ptt: 'PTT',
 }
 
-function NationalAveragePrices({ priceWeek }: { priceWeek: GaswatchPriceWeek | null }) {
+function NationalAveragePrices({ priceWeek, phTimestamp }: { priceWeek: GaswatchPriceWeek | null; phTimestamp: string }) {
   if (!priceWeek) {
     return (
-      <div className="rounded-lg border border-border bg-card shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-1">National Average Prices</h3>
-        <p className="text-sm text-muted-foreground">No national average prices are available yet.</p>
-      </div>
+      <Card>
+        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>National Average Prices</CardTitle>
+            <p className="mt-0.5 text-xs text-muted">{phTimestamp}</p>
+          </div>
+        </CardHeader>
+        <div className="rounded-lg border border-border bg-gray-50 p-4 text-sm text-muted">
+          No national average prices are available yet.
+        </div>
+      </Card>
     )
   }
 
@@ -298,8 +305,8 @@ function NationalAveragePrices({ priceWeek }: { priceWeek: GaswatchPriceWeek | n
       {/* Header */}
       <div className="px-5 py-4 border-b border-border flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">National Average Prices</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Week of {priceWeek.label}</p>
+          <CardTitle>National Average Prices</CardTitle>
+          <p className="mt-0.5 text-xs text-muted">Week of {priceWeek.label} · {phTimestamp}</p>
         </div>
         <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" />
@@ -443,11 +450,13 @@ function AdminPanelContent({
   activePanel,
   users,
   stations,
+  stationSubmissions,
   config,
 }: {
   activePanel: Exclude<DashboardPanel, 'overview'>
   users: Awaited<ReturnType<typeof listUsers>>['users']
   stations: Awaited<ReturnType<typeof searchStations>>['stations']
+  stationSubmissions: Awaited<ReturnType<typeof listStationSubmissions>>
   config: Awaited<ReturnType<typeof getSystemConfig>> | null
 }) {
   const wrapperClass = 'rounded-lg border border-border bg-card shadow-sm overflow-hidden'
@@ -470,14 +479,12 @@ function AdminPanelContent({
 
   if (activePanel === 'stations') {
     return (
-      <div className={wrapperClass}>
-        <div className={headerClass}>
-          <h3 className={titleClass}>Station Management</h3>
-        </div>
-        <div className={bodyClass}>
-          <StationEditor stations={stations} />
-        </div>
-      </div>
+      <Card padding="lg">
+        <CardHeader>
+          <CardTitle>Station Management</CardTitle>
+        </CardHeader>
+        <StationEditor stations={stations} stationSubmissions={stationSubmissions} />
+      </Card>
     )
   }
 

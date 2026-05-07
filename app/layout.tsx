@@ -11,10 +11,17 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 
 export const metadata: Metadata = {
   metadataBase: getAppBaseUrlObject(),
-  title: { default: 'GASTOS', template: '%s — GASTOS' },
+  title: {
+    default: 'GASTOS',
+    template: '%s — GASTOS',
+  },
   description: 'Track, compare, and report fuel prices across stations in the Philippines.',
   applicationName: 'GASTOS',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'GASTOS' },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'GASTOS',
+  },
   formatDetection: { telephone: false },
   openGraph: {
     type: 'website',

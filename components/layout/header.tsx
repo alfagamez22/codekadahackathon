@@ -13,17 +13,10 @@ export async function Header() {
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-sm">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between gap-4">
-          {/* Logo */}
-          <Link
-            href={session ? '/dashboard' : '/'}
-            className="flex items-center gap-2 shrink-0"
-          >
-            <div className="flex h-6 w-6 items-center justify-center rounded bg-[#0a0a0a] dark:bg-[#f9fafb]">
-              <i className="ri-gas-station-fill text-xs text-white dark:text-[#0a0a0a]" />
-            </div>
-            <span className="text-sm font-semibold tracking-[-0.01em] text-foreground hidden sm:inline">
-              GASTOS
-            </span>
+          <Link href={session ? '/dashboard' : '/'} className="flex items-center gap-1.5 shrink-0">
+            <span className="rounded-sm bg-[#16a34a] px-1.5 py-0.5 text-xs font-bold text-white leading-tight">GAS</span>
+            <span className="text-sm font-semibold tracking-[-0.01em] text-foreground hidden sm:inline">TOS</span>
+            <span className="text-sm font-semibold text-foreground sm:hidden">TOS</span>
           </Link>
 
           {/* Desktop nav */}

@@ -18,6 +18,14 @@ service cloud.firestore {
       }
     }
 
+    match /stationSubmissions/{submissionId} {
+      allow read: if signedIn();
+
+      match /votes/{voteId} {
+        allow read: if signedIn();
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

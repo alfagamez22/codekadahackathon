@@ -9,12 +9,9 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#f9fafb] px-4 py-12">
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="flex h-7 w-7 items-center justify-center rounded bg-[#0a0a0a]">
-            <i className="ri-gas-station-fill text-sm text-white" />
-          </div>
-          <span className="text-base font-semibold tracking-[-0.01em] text-[#0a0a0a]">GASTOS</span>
+        <div className="flex items-center justify-center gap-1.5 mb-8">
+          <span className="rounded-sm bg-[#16a34a] px-2 py-1 text-lg font-bold text-white leading-tight">GAS</span>
+          <span className="text-2xl font-bold tracking-[-0.01em] text-[#0a0a0a]">TOS</span>
         </div>
         {children}
       </div>

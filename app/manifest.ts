@@ -2,15 +2,14 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "GAStos",
-    short_name: "GAStos",
-    description:
-      "Track and compare fuel prices across stations in the Philippines",
-    start_url: "/",
-    display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#16a34a",
-    orientation: "portrait-primary",
+    name: 'GASTOS',
+    short_name: 'GASTOS',
+    description: 'Track and compare fuel prices across stations in the Philippines',
+    start_url: '/',
+    display: 'standalone',
+    background_color: '#ffffff',
+    theme_color: '#16a34a',
+    orientation: 'portrait-primary',
     icons: [
       {
         src: "/icons/icon.svg",
