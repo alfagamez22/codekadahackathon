@@ -1,21 +1,5 @@
 import 'server-only'
-import { FieldValue } from 'firebase-admin/firestore'
-import { getAdminDb } from '../firestore'
-
-// ---------------------------------------------------------------------------
-// stats/global — write-time aggregation document
-//
-// Shape:
-//   stationCount:   number  (incremented when a station is created)
-//   reportCount:    number  (incremented when a priceReport is submitted)
-//   userCount:      number  (incremented when a user is created)
-//   averagePrices:  Record<fuelType, { sum: number; count: number }>
-//                           (updated when a fuelPrice doc is written)
-//
-// Reading this doc costs exactly 1 Firestore read regardless of collection size.
-// ---------------------------------------------------------------------------
-
-const STATS_DOC = 'stats/global'
+import { mockStats, mockUsers } from '@/lib/mock-data'
 
 export type GlobalStats = {
   stationCount: number
@@ -25,102 +9,45 @@ export type GlobalStats = {
 }
 
 export async function getSystemStats(): Promise<GlobalStats> {
-  const db = await getAdminDb()
-  const snap = await db.doc(STATS_DOC).get()
-
-  if (!snap.exists) {
-    return { stationCount: 0, reportCount: 0, userCount: 0, averagePrices: [] }
-  }
-
-  const data = snap.data() as {
-    stationCount?: number
-    reportCount?: number
-    userCount?: number
-    priceSums?: Record<string, { sum: number; count: number }>
-  }
-
-  const averagePrices = Object.entries(data.priceSums ?? {})
-    .filter(([, v]) => v.count > 0)
-    .map(([fuelType, { sum, count }]) => ({
-      fuelType,
-      avgPrice: Math.round((sum / count) * 100) / 100,
-    }))
-    .sort((a, b) => a.fuelType.localeCompare(b.fuelType))
-
   return {
-    stationCount: data.stationCount ?? 0,
-    reportCount: data.reportCount ?? 0,
-    userCount: data.userCount ?? 0,
-    averagePrices,
+    stationCount: mockStats.stationCount,
+    reportCount: mockStats.reportCount,
+    userCount: mockStats.userCount,
+    averagePrices: mockStats.averagePrices,
   }
 }
 
-// ---------------------------------------------------------------------------
-// Write-time helpers — call these from Server Actions / mutations
-// ---------------------------------------------------------------------------
-
 export async function incrementReportCount(): Promise<void> {
-  const db = await getAdminDb()
-  await db.doc(STATS_DOC).set(
-    { reportCount: FieldValue.increment(1) },
-    { merge: true },
-  )
+  mockStats.reportCount += 1
 }
 
 export async function incrementUserCount(): Promise<void> {
-  const db = await getAdminDb()
-  await db.doc(STATS_DOC).set(
-    { userCount: FieldValue.increment(1) },
-    { merge: true },
-  )
+  mockStats.userCount += 1
 }
 
 export async function incrementStationCount(): Promise<void> {
-  const db = await getAdminDb()
-  await db.doc(STATS_DOC).set(
-    { stationCount: FieldValue.increment(1) },
-    { merge: true },
-  )
+  mockStats.stationCount += 1
 }
 
-/**
- * Update the running price sum/count for a fuel type.
- * Call this when a fuelPrice document is created or updated.
- */
 export async function updatePriceAverage(
-  fuelType: string,
-  newPrice: number,
-  oldPrice?: number,
+  _fuelType: string,
+  _newPrice: number,
+  _oldPrice?: number,
 ): Promise<void> {
-  const db = await getAdminDb()
-  const updates: Record<string, unknown> = {
-    [`priceSums.${fuelType}.sum`]: FieldValue.increment(newPrice - (oldPrice ?? 0)),
-  }
-  if (oldPrice === undefined) {
-    updates[`priceSums.${fuelType}.count`] = FieldValue.increment(1)
-  }
-  await db.doc(STATS_DOC).set(updates, { merge: true })
+  // no-op in mock mode — averagePrices are static
 }
 
 export async function getTopContributors(limit = 10) {
-  const db = await getAdminDb()
-  const snap = await db
-    .collection('users')
-    .orderBy('confirmedReportCount', 'desc')
-    .limit(limit * 3)
-    .get()
-
-  return snap.docs
-    .map((d) => {
-      const u = d.data()
-      const uid = typeof u.uid === 'string' && u.uid.trim().length > 0 ? u.uid : d.id
-      return {
-        uid,
-        displayName: u.displayName as string | null,
-        confirmedReportCount: u.confirmedReportCount as number,
-        trustScore: u.trustScore as number,
-      }
-    })
-    .sort((a, b) => b.confirmedReportCount - a.confirmedReportCount || b.trustScore - a.trustScore)
+  return [...mockUsers]
+    .sort(
+      (a, b) =>
+        b.confirmedReportCount - a.confirmedReportCount || b.trustScore - a.trustScore,
+    )
     .slice(0, limit)
+    .map((u) => ({
+      uid: u.uid,
+      displayName: u.displayName,
+      confirmedReportCount: u.confirmedReportCount,
+      trustScore: u.trustScore,
+    }))
 }

@@ -1,18 +1,12 @@
 import 'server-only'
 import { randomUUID } from 'crypto'
-import { getAdminDb } from '../firestore'
+import { mockFuelPrices, mockPriceHistory, mockStations, mockPriceSnapshots } from '@/lib/mock-data'
 import type { FuelPrice, PriceHistory, PriceSnapshot } from '@/types/price'
 import type { FuelType, PriceSourceType } from '@/types/station'
 
 export async function getCurrentPrices(stationId: string): Promise<FuelPrice[]> {
-  const db = await getAdminDb()
-  const snap = await db
-    .collection('fuelPrices')
-    .where('stationId', '==', stationId)
-    .get()
-
-  return snap.docs
-    .map((d) => d.data() as FuelPrice)
+  return mockFuelPrices
+    .filter((p) => p.stationId === stationId)
     .sort((a, b) => (a.fuelType || '').localeCompare(b.fuelType || ''))
 }
 
@@ -25,18 +19,13 @@ export async function getPriceHistory(params: {
 }): Promise<PriceHistory[]> {
   const { stationId, fuelType, from, to, limit = 100 } = params
 
-  const db = await getAdminDb()
-  let query = db
-    .collection('priceHistory')
-    .where('stationId', '==', stationId)
-    .orderBy('changedAt', 'desc')
+  let results = mockPriceHistory.filter((h) => h.stationId === stationId)
+  if (fuelType) results = results.filter((h) => h.fuelType === fuelType)
+  if (from) results = results.filter((h) => h.changedAt >= from)
+  if (to) results = results.filter((h) => h.changedAt <= to)
 
-  if (fuelType) query = query.where('fuelType', '==', fuelType) as typeof query
-  if (from) query = query.where('changedAt', '>=', from) as typeof query
-  if (to) query = query.where('changedAt', '<=', to) as typeof query
-
-  const snap = await query.limit(limit).get()
-  return snap.docs.map((d) => d.data() as PriceHistory)
+  results.sort((a, b) => b.changedAt.localeCompare(a.changedAt))
+  return results.slice(0, limit)
 }
 
 export async function upsertConfirmedPrice(data: {
@@ -50,11 +39,8 @@ export async function upsertConfirmedPrice(data: {
   const priceDocId = `${data.stationId}_${data.fuelType}`
   const nowIso = new Date().toISOString()
 
-  const db = await getAdminDb()
-  const existingSnap = await db.collection('fuelPrices').doc(priceDocId).get()
-  const existingPrice = existingSnap.exists
-    ? (existingSnap.data() as FuelPrice).currentPrice
-    : null
+  const existingIdx = mockFuelPrices.findIndex((p) => p.id === priceDocId)
+  const existingPrice = existingIdx !== -1 ? mockFuelPrices[existingIdx].currentPrice : null
 
   const priceData: FuelPrice = {
     id: priceDocId,
@@ -67,9 +53,14 @@ export async function upsertConfirmedPrice(data: {
     updatedAt: nowIso,
   }
 
-  const historyId = randomUUID()
-  const historyData: PriceHistory = {
-    id: historyId,
+  if (existingIdx !== -1) {
+    mockFuelPrices[existingIdx] = priceData
+  } else {
+    mockFuelPrices.push(priceData)
+  }
+
+  mockPriceHistory.push({
+    id: randomUUID(),
     stationId: data.stationId,
     fuelType: data.fuelType,
     oldPrice: existingPrice,
@@ -77,7 +68,7 @@ export async function upsertConfirmedPrice(data: {
     sourceType: data.sourceType,
     reportId: data.confirmedReportId ?? null,
     changedAt: nowIso,
-  }
+  })
 
   const badge =
     data.sourceType === 'admin'
@@ -86,21 +77,24 @@ export async function upsertConfirmedPrice(data: {
         ? 'community-verified'
         : 'baseline'
 
-  await Promise.all([
-    db.collection('fuelPrices').doc(priceDocId).set(priceData),
-    db.collection('priceHistory').doc(historyId).set(historyData),
-    db.collection('stations').doc(data.stationId).update({
-      [`latestPrices.${data.fuelType}`]: {
-        price: data.price,
-        sourceType: data.sourceType,
-        badge,
-        updatedAt: nowIso,
-        confirmationCount: data.confirmationCount ?? 0,
+  const stationIdx = mockStations.findIndex((s) => s.id === data.stationId)
+  if (stationIdx !== -1) {
+    mockStations[stationIdx] = {
+      ...mockStations[stationIdx],
+      latestPrices: {
+        ...mockStations[stationIdx].latestPrices,
+        [data.fuelType]: {
+          price: data.price,
+          sourceType: data.sourceType,
+          badge,
+          updatedAt: nowIso,
+          confirmationCount: data.confirmationCount ?? 0,
+        },
       },
       lastUpdatedAt: nowIso,
       updatedAt: nowIso,
-    }),
-  ])
+    }
+  }
 }
 
 export async function getBaselinePrices(params: {
@@ -110,12 +104,10 @@ export async function getBaselinePrices(params: {
 }): Promise<PriceSnapshot[]> {
   const { fuelType, brand, limit = 50 } = params
 
-  const db = await getAdminDb()
-  let query = db.collection('priceSnapshots').orderBy('scrapedAt', 'desc')
+  let results = [...mockPriceSnapshots]
+  if (fuelType) results = results.filter((s) => s.fuelType === fuelType)
+  if (brand) results = results.filter((s) => s.brand === brand)
 
-  if (fuelType) query = query.where('fuelType', '==', fuelType) as typeof query
-  if (brand) query = query.where('brand', '==', brand) as typeof query
-
-  const snap = await query.limit(limit).get()
-  return snap.docs.map((d) => d.data() as PriceSnapshot)
+  results.sort((a, b) => b.scrapedAt.localeCompare(a.scrapedAt))
+  return results.slice(0, limit)
 }

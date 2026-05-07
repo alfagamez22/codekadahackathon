@@ -2,7 +2,6 @@
 
 import { updateTag } from 'next/cache'
 import { requireAuth, requireRole } from '@/lib/auth/guards'
-import { adminDb } from '@/lib/firebase-admin/firestore'
 import {
   approveStationSubmission,
   createStationSubmission,
@@ -54,14 +53,7 @@ export async function adminApproveStationSubmissionAction(submissionId: string) 
 
   try {
     const result = await approveStationSubmission(submissionId, session)
-    await adminDb.collection('auditLogs').add({
-      adminId: session.uid,
-      action: 'approve_station_submission',
-      targetType: 'stationSubmission',
-      targetId: submissionId,
-      after: result,
-      createdAt: new Date().toISOString(),
-    })
+    // audit log — no-op in mock mode
     updateTag('station-submissions')
     updateTag('stations')
     return { success: true, promotedStationId: result.promotedStationId }
@@ -77,13 +69,7 @@ export async function adminRejectStationSubmissionAction(submissionId: string) {
 
   try {
     await rejectStationSubmission(submissionId, session)
-    await adminDb.collection('auditLogs').add({
-      adminId: session.uid,
-      action: 'reject_station_submission',
-      targetType: 'stationSubmission',
-      targetId: submissionId,
-      createdAt: new Date().toISOString(),
-    })
+    // audit log — no-op in mock mode
     updateTag('station-submissions')
     return { success: true }
   } catch (error) {

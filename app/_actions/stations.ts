@@ -7,7 +7,6 @@ import {
   deleteStation,
 } from "@/lib/firebase-admin/queries/stations";
 import { upsertConfirmedPrice } from "@/lib/firebase-admin/queries/prices";
-import { adminDb } from "@/lib/firebase-admin/firestore";
 import { stationSchema } from "@/lib/utils/validators";
 import { updateTag } from "next/cache";
 import type { StationInput } from "@/lib/utils/validators";
@@ -20,14 +19,8 @@ export async function createStationAction(input: StationInput) {
 
   const id = await createStation(parsed.data);
 
-  await adminDb.collection("auditLogs").add({
-    adminId: session.uid,
-    action: "create_station",
-    targetType: "station",
-    targetId: id,
-    after: parsed.data,
-    createdAt: new Date().toISOString(),
-  });
+  // audit log — no-op in mock mode
+  void session;
 
   updateTag("stations");
   return { success: true, stationId: id };
@@ -40,14 +33,8 @@ export async function updateStationAction(
   const session = await requireRole(["admin"]);
   await updateStation(id, input);
 
-  await adminDb.collection("auditLogs").add({
-    adminId: session.uid,
-    action: "update_station",
-    targetType: "station",
-    targetId: id,
-    after: input,
-    createdAt: new Date().toISOString(),
-  });
+  // audit log — no-op in mock mode
+  void session;
 
   updateTag("stations");
   return { success: true };
@@ -57,13 +44,8 @@ export async function deleteStationAction(id: string) {
   const session = await requireRole(["admin"]);
   await deleteStation(id);
 
-  await adminDb.collection("auditLogs").add({
-    adminId: session.uid,
-    action: "delete_station",
-    targetType: "station",
-    targetId: id,
-    createdAt: new Date().toISOString(),
-  });
+  // audit log — no-op in mock mode
+  void session;
 
   updateTag("stations");
   return { success: true };
@@ -83,14 +65,8 @@ export async function adminOverridePriceAction(data: {
     sourceType: "admin",
   });
 
-  await adminDb.collection("auditLogs").add({
-    adminId: session.uid,
-    action: "override_price",
-    targetType: "station",
-    targetId: data.stationId,
-    after: data,
-    createdAt: new Date().toISOString(),
-  });
+  // audit log — no-op in mock mode
+  void session;
 
   updateTag("prices");
   return { success: true };

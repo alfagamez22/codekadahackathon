@@ -1,22 +1,15 @@
 'use server'
 
 import { requireAuth } from '@/lib/auth/guards'
-import { adminDb } from '@/lib/firebase-admin/firestore'
 
-export async function subscribeToPushAction(token: string) {
-  const session = await requireAuth()
-
-  await adminDb.collection('pushSubscriptions').doc(session.uid).set({
-    userId: session.uid,
-    token,
-    updatedAt: new Date().toISOString(),
-  })
-
+export async function subscribeToPushAction(_token: string) {
+  await requireAuth()
+  // no-op in mock mode — no Firestore pushSubscriptions writes
   return { success: true }
 }
 
 export async function unsubscribeFromPushAction() {
-  const session = await requireAuth()
-  await adminDb.collection('pushSubscriptions').doc(session.uid).delete()
+  await requireAuth()
+  // no-op in mock mode
   return { success: true }
 }

@@ -2,7 +2,6 @@
 
 import { requireAuth, requireRole } from "@/lib/auth/guards";
 import { setUserRole } from "@/lib/firebase-admin/auth";
-import { adminDb } from "@/lib/firebase-admin/firestore";
 import {
   updateUserRole as dbUpdateUserRole,
   upsertUser,
@@ -30,14 +29,8 @@ export async function assignRoleAction(targetUserId: string, role: UserRole) {
   await dbUpdateUserRole(targetUserId, role);
   await setUserRole(targetUserId, role);
 
-  await adminDb.collection("auditLogs").add({
-    adminId: session.uid,
-    action: "assign_role",
-    targetType: "user",
-    targetId: targetUserId,
-    after: { role },
-    createdAt: new Date().toISOString(),
-  });
+  // audit log — no-op in mock mode
+  void session;
 
   return { success: true };
 }

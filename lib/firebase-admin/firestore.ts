@@ -1,11 +1,5 @@
 import 'server-only'
-import { getFirestore } from 'firebase-admin/firestore'
-import getAdminApp from './index'
-
-async function getAdminDb() {
-  const app = await getAdminApp()
-  return getFirestore(app)
-}
+import { mockSystemConfig } from '@/lib/mock-data'
 
 export const defaultSystemConfig = {
   minConfirmations: 4,
@@ -19,41 +13,37 @@ export const defaultSystemConfig = {
 export type SystemConfig = typeof defaultSystemConfig
 
 export async function getSystemConfig(): Promise<SystemConfig> {
-  const db = await getAdminDb()
-  const snap = await db.collection('systemConfig').doc('settings').get()
-
-  if (!snap.exists) {
-    return defaultSystemConfig
-  }
-
-  return {
-    ...defaultSystemConfig,
-    ...(snap.data() as Partial<SystemConfig>),
-  }
+  return { ...mockSystemConfig }
 }
 
-export const adminDb = new Proxy({} as any, {
-  get(_, prop) {
-    if (prop === 'collection' || prop === 'doc') {
-      return (...args: any[]) =>
-        getAdminDb().then((db) => {
-          const target = (db as any)[prop]
-          return target.apply(db, args)
-        })
-    }
+// ---------------------------------------------------------------------------
+// adminDb — no-op stub so existing call-sites that import it don't crash.
+// All actual data access goes through lib/firebase-admin/queries/* which
+// reads/writes the in-memory mock arrays in lib/mock-data.ts.
+// ---------------------------------------------------------------------------
 
-    return (...args: any[]) =>
-      getAdminDb()
-        .then((db) => {
-          const target = (db as any)[prop]
-          if (typeof target === 'function') return target.apply(db, args)
-          return target
-        })
-        .catch((err) => {
-          console.error(`adminDb.${String(prop)} failed:`, err)
-          throw err
-        })
+function noopCollection() {
+  const proxy: Record<string, unknown> = {}
+  return new Proxy(proxy, {
+    get() {
+      return (..._args: unknown[]) => Promise.resolve({ docs: [], exists: false, data: () => ({}) })
+    },
+  })
+}
+
+export const adminDb = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      if (prop === 'collection' || prop === 'doc') {
+        return (..._args: unknown[]) => noopCollection()
+      }
+      return (..._args: unknown[]) => Promise.resolve(null)
+    },
   },
-})
+) as Record<string, (...args: unknown[]) => unknown>
 
-export { getAdminDb }
+// getAdminDb — used by the modular queries; returns the same no-op stub.
+export async function getAdminDb() {
+  return adminDb
+}

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { getAdminDb } from '@/lib/firebase-admin/firestore'
+import { mockFuelPrices } from '@/lib/mock-data'
 import type { FuelType } from '@/types/station'
 
 type CommunityPriceOverride = {
@@ -13,30 +13,20 @@ type CommunityPriceOverride = {
 }
 
 export async function GET() {
-  try {
-    const db = await getAdminDb()
-    const snap = await db
-      .collection('fuelPrices')
-      .where('sourceType', '==', 'community')
-      .limit(1000)
-      .get()
+  const prices: CommunityPriceOverride[] = mockFuelPrices
+    .filter(
+      (p) =>
+        p.sourceType === 'community' &&
+        typeof p.stationId === 'string' &&
+        p.stationId.startsWith('gaswatch-'),
+    )
+    .map((p) => ({
+      stationId: p.stationId,
+      fuelType: p.fuelType,
+      price: p.currentPrice,
+      confirmationCount: p.confirmationCount,
+      updatedAt: p.updatedAt,
+    }))
 
-    const prices = snap.docs
-      .map((doc) => doc.data())
-      .filter((price) => typeof price.stationId === 'string' && price.stationId.startsWith('gaswatch-'))
-      .map((price) => ({
-        stationId: price.stationId as string,
-        fuelType: price.fuelType as FuelType,
-        price: Number(price.currentPrice),
-        confirmationCount: Number(price.confirmationCount ?? 0),
-        updatedAt: String(price.updatedAt ?? ''),
-      }))
-      .filter((price): price is CommunityPriceOverride => Number.isFinite(price.price))
-
-    return NextResponse.json({ prices })
-  } catch (error) {
-    console.error('Community overrides failed:', error)
-    return NextResponse.json({ error: 'Failed to load community price overrides' }, { status: 500 })
-  }
+  return NextResponse.json({ prices })
 }
-

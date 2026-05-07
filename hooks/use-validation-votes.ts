@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { collection, query, where, onSnapshot, doc, type Unsubscribe } from 'firebase/firestore'
-import { getFirebaseDb } from '@/lib/firebase/client'
+import { mockValidationVotes, mockPriceReports } from '@/lib/mock-data'
 import type { PriceReport, ValidationVote } from '@/types/report'
 
 export function useValidationVotes(reportId: string) {
@@ -10,12 +9,9 @@ export function useValidationVotes(reportId: string) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const votesRef = collection(getFirebaseDb(), 'priceReports', reportId, 'votes')
-    const unsub = onSnapshot(votesRef, (snap) => {
-      setVotes(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ValidationVote)))
-      setLoading(false)
-    })
-    return unsub
+    const result = mockValidationVotes[reportId] ?? []
+    setVotes(result)
+    setLoading(false)
   }, [reportId])
 
   return { votes, loading }
@@ -26,13 +22,9 @@ export function usePendingReports() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const reportsRef = collection(getFirebaseDb(), 'priceReports')
-    const q = query(reportsRef, where('status', '==', 'pending'))
-    const unsub: Unsubscribe = onSnapshot(q, (snap) => {
-      setReports(snap.docs.map((d) => ({ id: d.id, ...d.data() } as PriceReport)))
-      setLoading(false)
-    })
-    return unsub
+    const pending = mockPriceReports.filter((r) => r.status === 'pending')
+    setReports(pending)
+    setLoading(false)
   }, [])
 
   return { reports, loading }

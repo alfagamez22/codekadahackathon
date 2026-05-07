@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { readSession } from '@/lib/auth/session'
 import { upsertConfirmedPrice } from '@/lib/firebase-admin/queries/prices'
 import { updateTag } from 'next/cache'
 import type { FuelType } from '@/types/station'

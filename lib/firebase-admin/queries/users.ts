@@ -1,15 +1,10 @@
 import 'server-only'
-import { FieldValue } from 'firebase-admin/firestore'
-import { getAdminDb } from '../firestore'
-import { incrementUserCount } from './analytics'
+import { mockUsers, mockStats } from '@/lib/mock-data'
 import type { UserProfile } from '@/types/auth'
 import type { UserRole } from '@/types/auth'
 
 export async function getUser(id: string): Promise<UserProfile | null> {
-  const db = await getAdminDb()
-  const snap = await db.collection('users').doc(id).get()
-  if (!snap.exists) return null
-  return snap.data() as UserProfile
+  return mockUsers.find((u) => u.uid === id) ?? null
 }
 
 export async function upsertUser(data: {
@@ -19,13 +14,11 @@ export async function upsertUser(data: {
   photoURL?: string | null
   role?: UserRole
 }): Promise<void> {
-  const db = await getAdminDb()
-  const ref = db.collection('users').doc(data.id)
-  const snap = await ref.get()
   const nowIso = new Date().toISOString()
+  const idx = mockUsers.findIndex((u) => u.uid === data.id)
 
-  if (!snap.exists) {
-    await ref.set({
+  if (idx === -1) {
+    mockUsers.push({
       uid: data.id,
       displayName: data.displayName ?? null,
       email: data.email ?? null,
@@ -37,36 +30,35 @@ export async function upsertUser(data: {
       createdAt: nowIso,
       updatedAt: nowIso,
     })
-    void incrementUserCount()
+    mockStats.userCount += 1
   } else {
-    const updates: Record<string, unknown> = { updatedAt: nowIso }
+    const updates: Partial<UserProfile> = { updatedAt: nowIso }
     if (data.displayName !== undefined) updates.displayName = data.displayName
     if (data.email !== undefined) updates.email = data.email
     if (data.photoURL !== undefined) updates.photoURL = data.photoURL
     if (data.role !== undefined) updates.role = data.role
-    await ref.update(updates)
+    mockUsers[idx] = { ...mockUsers[idx], ...updates }
   }
 }
 
 export async function updateUserRole(id: string, role: UserRole): Promise<void> {
-  const db = await getAdminDb()
-  await db.collection('users').doc(id).update({
-    role,
-    updatedAt: new Date().toISOString(),
-  })
+  const idx = mockUsers.findIndex((u) => u.uid === id)
+  if (idx !== -1) {
+    mockUsers[idx] = { ...mockUsers[idx], role, updatedAt: new Date().toISOString() }
+  }
 }
 
 export async function incrementUserReportCount(id: string, confirmed = false): Promise<void> {
-  const db = await getAdminDb()
-  const updates: Record<string, unknown> = {
-    reportCount: FieldValue.increment(1),
+  const idx = mockUsers.findIndex((u) => u.uid === id)
+  if (idx === -1) return
+  const user = mockUsers[idx]
+  mockUsers[idx] = {
+    ...user,
+    reportCount: user.reportCount + 1,
+    confirmedReportCount: confirmed ? user.confirmedReportCount + 1 : user.confirmedReportCount,
+    trustScore: confirmed ? user.trustScore + 5 : user.trustScore,
     updatedAt: new Date().toISOString(),
   }
-  if (confirmed) {
-    updates.confirmedReportCount = FieldValue.increment(1)
-    updates.trustScore = FieldValue.increment(5)
-  }
-  await db.collection('users').doc(id).update(updates)
 }
 
 export async function listUsers(params: {
@@ -76,18 +68,11 @@ export async function listUsers(params: {
 }): Promise<{ users: UserProfile[]; total: number }> {
   const { page = 1, pageSize = 20, role } = params
 
-  const db = await getAdminDb()
-  const snap = await db.collection('users').get()
-
-  let all = snap.docs.map((d) => d.data() as UserProfile)
-
+  let all = [...mockUsers]
   if (role) all = all.filter((u) => u.role === role)
-
   all.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))
 
   const total = all.length
   const offset = (page - 1) * pageSize
-  const users = all.slice(offset, offset + pageSize)
-
-  return { users, total }
+  return { users: all.slice(offset, offset + pageSize), total }
 }

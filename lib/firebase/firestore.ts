@@ -1,56 +1,42 @@
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  where,
-  orderBy,
-  limit,
-  type CollectionReference,
-  type DocumentReference,
-} from 'firebase/firestore'
-import { getFirebaseDb } from './client'
+import { mockPriceReports } from '@/lib/mock-data'
 import type { PriceReport } from '@/types/report'
 
-export function getPriceReportsRef(): CollectionReference<PriceReport> {
-  return collection(getFirebaseDb(), 'priceReports') as CollectionReference<PriceReport>
+// ---------------------------------------------------------------------------
+// Client-side Firestore stubs — all real-time subscriptions return hardcoded
+// mock data immediately with a no-op unsubscribe function.
+// ---------------------------------------------------------------------------
+
+export function getPriceReportsRef() {
+  return null as unknown as import('firebase/firestore').CollectionReference<PriceReport>
 }
 
 export function getSystemConfigRef() {
-  return doc(getFirebaseDb(), 'systemConfig', 'settings')
+  return null as unknown as import('firebase/firestore').DocumentReference
 }
 
-export function getReportRef(reportId: string): DocumentReference<PriceReport> {
-  return doc(getFirebaseDb(), 'priceReports', reportId) as DocumentReference<PriceReport>
+export function getReportRef(reportId: string) {
+  return null as unknown as import('firebase/firestore').DocumentReference<PriceReport>
 }
 
-export function getVoteRef(reportId: string, userId: string) {
-  return doc(getFirebaseDb(), 'priceReports', reportId, 'votes', userId)
+export function getVoteRef(_reportId: string, _userId: string) {
+  return null as unknown as import('firebase/firestore').DocumentReference
 }
 
 export function subscribeToPendingReports(
   callback: (reports: PriceReport[]) => void,
-  pageLimit = 20
-) {
-  const q = query(
-    getPriceReportsRef(),
-    where('status', '==', 'pending'),
-    orderBy('createdAt', 'desc'),
-    limit(pageLimit)
-  )
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => {
-      const { id: _id, ...rest } = d.data() as PriceReport & { id?: string }
-      return { id: d.id, ...rest } as PriceReport
-    }))
-  })
+  _pageLimit = 20,
+): () => void {
+  const pending = mockPriceReports.filter((r) => r.status === 'pending')
+  // Call synchronously on next tick to mimic snapshot behaviour
+  setTimeout(() => callback(pending), 0)
+  return () => {}
 }
 
-export function subscribeToReport(reportId: string, callback: (report: PriceReport | null) => void) {
-  return onSnapshot(getReportRef(reportId), (snap) => {
-    callback(snap.exists() ? (() => {
-      const { id: _id, ...rest } = snap.data() as PriceReport & { id?: string }
-      return { id: snap.id, ...rest } as PriceReport
-    })() : null)
-  })
+export function subscribeToReport(
+  reportId: string,
+  callback: (report: PriceReport | null) => void,
+): () => void {
+  const report = mockPriceReports.find((r) => r.id === reportId) ?? null
+  setTimeout(() => callback(report), 0)
+  return () => {}
 }
