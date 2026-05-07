@@ -218,6 +218,7 @@ export default function NearbyPage() {
   const [locationMode, setLocationMode] = useState<'demo' | 'device'>('device')
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
   const [etaByStationId, setEtaByStationId] = useState<Record<string, number | null>>({})
+  const [routeByStationId, setRouteByStationId] = useState<Record<string, Array<[number, number]> | Array<Array<[number, number]>> | null>>({})
   const [etaLoading, setEtaLoading] = useState(false)
   const [showUserMarker, setShowUserMarker] = useState(true)
   const [targetFuelLiters, setTargetFuelLiters] = useState(DEFAULT_TARGET_FUEL_LITERS)
@@ -363,6 +364,7 @@ export default function NearbyPage() {
   useEffect(() => {
     if (!activeCoords || etaStations.length === 0 || !GEOAPIFY_API_KEY) {
       setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+      setRouteByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
       setEtaLoading(false)
       return
     }
@@ -379,21 +381,24 @@ export default function NearbyPage() {
             )
 
             if (!response.ok) {
-              return { id: String(station.id), etaMinutes: null }
+              return { id: String(station.id), etaMinutes: null, coordinates: null }
             }
 
             const data = (await response.json()) as GeoapifyRouteResponse
             const route = data.features?.[0]
             const etaMinutes = route ? Math.round((route.properties.time || 0) / 60) : null
-            return { id: String(station.id), etaMinutes }
+            const coordinates = route?.geometry?.coordinates ?? null
+            return { id: String(station.id), etaMinutes, coordinates }
           })
         )
 
         if (cancelled) return
 
         const next: Record<string, number | null> = {}
+        const nextRoutes: Record<string, Array<[number, number]> | Array<Array<[number, number]>> | null> = {}
         results.forEach((result) => {
           next[result.id] = result.etaMinutes
+          nextRoutes[result.id] = result.coordinates
         })
         setEtaByStationId((prev) => {
           const prevKeys = Object.keys(prev)
@@ -404,10 +409,12 @@ export default function NearbyPage() {
           }
           return prev
         })
+        setRouteByStationId(nextRoutes)
       } catch (err) {
         if (!cancelled) {
           console.error('ETA calculation failed:', err)
           setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+          setRouteByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
         }
       } finally {
         if (!cancelled) setEtaLoading(false)
@@ -656,6 +663,7 @@ export default function NearbyPage() {
   const nextBestStation = feasibleStations[1] ?? null
   const savingsVsNext = bestStation && nextBestStation ? nextBestStation.objectiveCost - bestStation.objectiveCost : null
   const highlightedStationId = bestStation ? `gaswatch-${bestStation.id}` : null
+  const activeRouteCoordinates = bestStation ? routeByStationId[String(bestStation.id)] : null
 
   return (
     <div>
@@ -817,6 +825,7 @@ export default function NearbyPage() {
                 showMarkerPopup={false}
                 containerClassName="-mx-4 sm:-mx-6 lg:-mx-8 z-0"
                 mapClassName="h-80 sm:h-[520px] lg:h-[620px]"
+                routeCoordinates={activeRouteCoordinates}
               />
               {selectedStation && (
                 <div className="absolute left-1/2 top-4 z-10 w-[90%] max-w-md -translate-x-1/2 rounded-xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur">
@@ -913,7 +922,7 @@ export default function NearbyPage() {
           )}
         </div>
 
-        <aside className="h-fit rounded-xl border border-border bg-card p-4 lg:sticky lg:top-24">
+        <aside className="h-fit max-h-[calc(100vh-8rem)] overflow-y-auto rounded-xl border border-border bg-card p-4 lg:sticky lg:top-24">
           <div className="flex items-start justify-between gap-2">
             <div>
               <div className="text-sm font-semibold text-foreground">Smart Station Optimizer</div>

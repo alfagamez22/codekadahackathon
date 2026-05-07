@@ -24,6 +24,31 @@ interface StationMapProps {
   containerClassName?: string
   mapClassName?: string
   showMarkerPopup?: boolean
+  routeCoordinates?: Array<[number, number]> | Array<Array<[number, number]>> | null
+}
+
+function normalizeRouteCoordinates(coords: Array<[number, number]> | Array<Array<[number, number]>> | unknown): Array<[number, number]> {
+  if (!Array.isArray(coords) || coords.length === 0) return []
+
+  const first = coords[0] as unknown
+  if (Array.isArray(first) && typeof first[0] === 'number' && typeof first[1] === 'number') {
+    return coords as Array<[number, number]>
+  }
+
+  if (Array.isArray(first) && Array.isArray(first[0])) {
+    const flattened: Array<[number, number]> = []
+    for (const line of coords as Array<Array<[number, number]>>) {
+      if (!Array.isArray(line)) continue
+      for (const pair of line) {
+        if (Array.isArray(pair) && typeof pair[0] === 'number' && typeof pair[1] === 'number') {
+          flattened.push([pair[0], pair[1]])
+        }
+      }
+    }
+    return flattened
+  }
+
+  return []
 }
 
 type BrandStyle = {
@@ -172,6 +197,7 @@ export function StationMap({
   containerClassName,
   mapClassName,
   showMarkerPopup = true,
+  routeCoordinates,
 }: StationMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<Leaflet.Map | null>(null)
@@ -179,6 +205,7 @@ export function StationMap({
   const userLayerRef = useRef<Leaflet.Marker | null>(null)
   const userAccuracyLayerRef = useRef<Leaflet.Circle | null>(null)
   const userFovLayerRef = useRef<Leaflet.Polygon | null>(null)
+  const routeLayerRef = useRef<Leaflet.Polyline | null>(null)
   const leafletRef = useRef<typeof Leaflet | null>(null)
   const [mapReady, setMapReady] = useState(false)
 
@@ -361,6 +388,28 @@ export function StationMap({
       markerLayer.addTo(map)
       markerLayerRef.current = markerLayer
 
+      // ── Step 4.5: Update route polyline ───────────────────────────
+      if (routeLayerRef.current) {
+        map.removeLayer(routeLayerRef.current)
+        routeLayerRef.current = null
+      }
+
+      if (routeCoordinates) {
+        const routeCoords = normalizeRouteCoordinates(routeCoordinates)
+        // Geoapify returns [lng, lat], Leaflet expects [lat, lng]
+        const coordinates = routeCoords.map((coord) => [coord[1], coord[0]] as [number, number])
+        
+        if (coordinates.length >= 2) {
+          routeLayerRef.current = L.polyline(coordinates, {
+            color: '#3b82f6', // blue-500
+            weight: 4,
+            opacity: 0.8,
+            smoothFactor: 1.0,
+            dashArray: '10, 10',
+          }).addTo(map)
+        }
+      }
+
       // ── Step 5: Position the map ──────────────────────────────────
       if (!centerOnUser && stations.length > 0) {
         const bounds = L.latLngBounds(stations.map((station) => [station.latitude, station.longitude]))
@@ -376,7 +425,7 @@ export function StationMap({
     return () => {
       cancelled = true
     }
-  }, [center, centerOnUser, effectiveBrandStyles, hasUserLocation, highlightStationId, onStationSelect, showMarkerPopup, showUserMarker, stations, userHeading, userLat, userLng])
+  }, [center, centerOnUser, effectiveBrandStyles, hasUserLocation, highlightStationId, onStationSelect, showMarkerPopup, showUserMarker, stations, userHeading, userLat, userLng, routeCoordinates])
 
   // Destroy the map when the component unmounts to prevent memory leaks.
   useEffect(() => {
@@ -390,6 +439,7 @@ export function StationMap({
       userLayerRef.current = null
       userAccuracyLayerRef.current = null
       userFovLayerRef.current = null
+      routeLayerRef.current = null
     }
   }, [])
 
