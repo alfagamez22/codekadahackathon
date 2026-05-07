@@ -64,7 +64,7 @@ function sortAveragePrices(prices: Array<{ fuelType: string; avgPrice: number }>
   return [...prices].sort((a, b) => {
     const aIndex = fuelTypeOrder.indexOf(a.fuelType)
     const bIndex = fuelTypeOrder.indexOf(b.fuelType)
-    if (aIndex === -1 && bIndex === -1) return a.fuelType.localeCompare(b.fuelType)
+    if (aIndex === -1 && bIndex === -1) return (a.fuelType || '').localeCompare(b.fuelType || '')
     if (aIndex === -1) return 1
     if (bIndex === -1) return -1
     return aIndex - bIndex

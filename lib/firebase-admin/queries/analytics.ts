@@ -25,7 +25,7 @@ export async function getSystemStats() {
       avgPrice:
         Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100,
     }))
-    .sort((a, b) => a.fuelType.localeCompare(b.fuelType))
+    .sort((a, b) => (a.fuelType || '').localeCompare(b.fuelType || ''))
 
   return {
     stationCount: stationSnap.data().count,

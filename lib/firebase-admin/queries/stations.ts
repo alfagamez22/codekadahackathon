@@ -69,7 +69,7 @@ export async function searchStations(params: {
     )
   }
 
-  all.sort((a, b) => a.name.localeCompare(b.name))
+  all.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
   const total = all.length
   const offset = (page - 1) * pageSize

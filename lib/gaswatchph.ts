@@ -174,6 +174,6 @@ export function findCurrentWeekPrices(
   history: GaswatchPriceWeek[],
   todayPhDate: string,
 ): GaswatchPriceWeek | null {
-  const sorted = [...history].sort((a, b) => b.week.localeCompare(a.week))
+  const sorted = [...history].sort((a, b) => (b.week || '').localeCompare(a.week || ''))
   return sorted.find((entry) => entry.week <= todayPhDate) ?? null
 }

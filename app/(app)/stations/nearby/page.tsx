@@ -61,7 +61,7 @@ const getPriceEntries = (prices: GaswatchPriceMap) => {
   entries.sort((a, b) => {
     const aIndex = PRICE_ORDER.indexOf(a.fuelType)
     const bIndex = PRICE_ORDER.indexOf(b.fuelType)
-    if (aIndex === -1 && bIndex === -1) return a.fuelType.localeCompare(b.fuelType)
+    if (aIndex === -1 && bIndex === -1) return (a.fuelType || '').localeCompare(b.fuelType || '')
     if (aIndex === -1) return 1
     if (bIndex === -1) return -1
     return aIndex - bIndex
@@ -103,7 +103,7 @@ export default function NearbyPage() {
 
   const displayedStations = useMemo(() => {
     if (!coords) {
-      return [...stationsWithDistance].sort((a, b) => a.name.localeCompare(b.name))
+      return [...stationsWithDistance].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
     }
 
     return stationsWithDistance

@@ -13,7 +13,7 @@ export async function getCurrentPrices(stationId: string): Promise<FuelPrice[]> 
 
   return snap.docs
     .map((d) => d.data() as FuelPrice)
-    .sort((a, b) => a.fuelType.localeCompare(b.fuelType))
+    .sort((a, b) => (a.fuelType || '').localeCompare(b.fuelType || ''))
 }
 
 export async function getPriceHistory(params: {
