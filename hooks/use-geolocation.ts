@@ -18,41 +18,20 @@ interface GeolocationState {
 
 interface GeolocationOptions {
   auto?: boolean
-  statusMessage: string | null
-  permission: PermissionState | 'unknown'
-  requestLocation: () => void
 }
 
-interface GeolocationOptions {
-  auto?: boolean
-}
-
-export function useGeolocation(options: GeolocationOptions = {}): GeolocationState {
-  const { auto = true } = options
-  const [state, setState] = useState<Omit<GeolocationState, 'requestLocation'>>({
 export function useGeolocation(options: GeolocationOptions = {}): GeolocationState {
   const { auto = true } = options
   const [state, setState] = useState<Omit<GeolocationState, 'requestLocation'>>({
     coords: null,
     loading: auto,
-    loading: auto,
     error: null,
-    statusMessage: null,
-    permission: 'unknown',
     statusMessage: null,
     permission: 'unknown',
   })
 
   const requestLocation = useCallback(() => {
-  const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setState({
-        coords: null,
-        loading: false,
-        error: 'Geolocation is not supported by your browser.',
-        statusMessage: 'Your browser does not support location services.',
-        permission: 'unknown',
-      })
       setState({
         coords: null,
         loading: false,
