@@ -217,7 +217,10 @@ export default function NearbyPage() {
   const { coords, heading, loading: geoLoading, error: geoError, requestLocation, statusMessage, permission } = useGeolocation({ auto: true })
   const [locationMode, setLocationMode] = useState<'demo' | 'device'>('device')
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
+  const [showOnlySelected, setShowOnlySelected] = useState(false)
+  const [selectedAlternativeStationId, setSelectedAlternativeStationId] = useState<string | null>(null)
   const [etaByStationId, setEtaByStationId] = useState<Record<string, number | null>>({})
+  const [routeDistanceByStationId, setRouteDistanceByStationId] = useState<Record<string, number | null>>({})
   const [routeByStationId, setRouteByStationId] = useState<Record<string, Array<[number, number]> | Array<Array<[number, number]>> | null>>({})
   const [etaLoading, setEtaLoading] = useState(false)
   const [showUserMarker, setShowUserMarker] = useState(true)
@@ -364,6 +367,7 @@ export default function NearbyPage() {
   useEffect(() => {
     if (!activeCoords || etaStations.length === 0 || !GEOAPIFY_API_KEY) {
       setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+      setRouteDistanceByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
       setRouteByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
       setEtaLoading(false)
       return
@@ -381,23 +385,26 @@ export default function NearbyPage() {
             )
 
             if (!response.ok) {
-              return { id: String(station.id), etaMinutes: null, coordinates: null }
+              return { id: String(station.id), etaMinutes: null, routeDistanceKm: null, coordinates: null }
             }
 
             const data = (await response.json()) as GeoapifyRouteResponse
             const route = data.features?.[0]
             const etaMinutes = route ? Math.round((route.properties.time || 0) / 60) : null
+            const routeDistanceKm = route ? (route.properties.distance || 0) / 1000 : null
             const coordinates = route?.geometry?.coordinates ?? null
-            return { id: String(station.id), etaMinutes, coordinates }
+            return { id: String(station.id), etaMinutes, routeDistanceKm, coordinates }
           })
         )
 
         if (cancelled) return
 
         const next: Record<string, number | null> = {}
+        const nextDistances: Record<string, number | null> = {}
         const nextRoutes: Record<string, Array<[number, number]> | Array<Array<[number, number]>> | null> = {}
         results.forEach((result) => {
           next[result.id] = result.etaMinutes
+          nextDistances[result.id] = result.routeDistanceKm
           nextRoutes[result.id] = result.coordinates
         })
         setEtaByStationId((prev) => {
@@ -409,11 +416,13 @@ export default function NearbyPage() {
           }
           return prev
         })
+        setRouteDistanceByStationId(nextDistances)
         setRouteByStationId(nextRoutes)
       } catch (err) {
         if (!cancelled) {
           console.error('ETA calculation failed:', err)
           setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+          setRouteDistanceByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
           setRouteByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
         }
       } finally {
@@ -548,10 +557,13 @@ export default function NearbyPage() {
     const pRef = entries.reduce((sum, entry) => sum + entry.stationPrice, 0) / entries.length
 
     const scored = entries.map((entry) => {
+      const stationKey = String(entry.id).replace('gaswatch-', '')
+      const drivingDistanceKm = routeDistanceByStationId[stationKey] ?? entry.distanceKm ?? 0
+      
       let deltaD = 0
       let deltaT = 0
 
-      const litersNeededToStation = entry.distanceKm * consumptionLPerKm
+      const litersNeededToStation = drivingDistanceKm * consumptionLPerKm
       const usableFuelBeforeStop = Math.max(0, currentFuelLiters - reserveFuelLiters)
       let feasible = litersNeededToStation <= usableFuelBeforeStop
       let infeasibleReason: string | undefined
@@ -566,11 +578,11 @@ export default function NearbyPage() {
       }
 
       if (travelMode === 'ROUNDABOUT') {
-        deltaD = entry.distanceKm * 2
-        deltaT = entry.etaMinutes * 2
+        deltaD = drivingDistanceKm * 2
+        deltaT = (etaByStationId[stationKey] ?? estimateMinutesForDistance(drivingDistanceKm)) * 2
       } else if (travelMode === 'ONE_WAY' && destination) {
         const distDirect = getDistanceKm(originCoords, destination)
-        const distToStation = entry.distanceKm
+        const distToStation = drivingDistanceKm
         const distStationToDest = getDistanceKm(entry.coords, destination)
         deltaD = Math.max(0, (distToStation + distStationToDest) - distDirect)
 
@@ -662,8 +674,40 @@ export default function NearbyPage() {
   const bestStation = feasibleStations[0] ?? null
   const nextBestStation = feasibleStations[1] ?? null
   const savingsVsNext = bestStation && nextBestStation ? nextBestStation.objectiveCost - bestStation.objectiveCost : null
-  const highlightedStationId = bestStation ? `gaswatch-${bestStation.id}` : null
-  const activeRouteCoordinates = bestStation ? routeByStationId[String(bestStation.id)] : null
+  const highlightedStationId = selectedStationId || (bestStation ? `gaswatch-${bestStation.id}` : null) || selectedAlternativeStationId
+  const activeRouteCoordinates = useMemo(() => {
+    if (selectedStationId) {
+      const stationKey = selectedStationId.replace('gaswatch-', '')
+      if (routeByStationId[stationKey]) return routeByStationId[stationKey]
+    }
+    if (bestStation) {
+      const bestKey = String(bestStation.id)
+      if (routeByStationId[bestKey]) return routeByStationId[bestKey]
+    }
+    return null
+  }, [bestStation, selectedStationId, routeByStationId])
+
+  const alternativeRouteCoordinates = useMemo(() => {
+    if (selectedAlternativeStationId && selectedAlternativeStationId !== selectedStationId && selectedAlternativeStationId !== (bestStation ? `gaswatch-${bestStation.id}` : null)) {
+      const altKey = String(selectedAlternativeStationId).replace('gaswatch-', '')
+      if (routeByStationId[altKey]) return routeByStationId[altKey]
+    }
+    return null
+  }, [selectedAlternativeStationId, selectedStationId, bestStation, routeByStationId])
+
+  const displayedMapStations = useMemo(() => {
+    if (!showOnlySelected) return mapStations
+    
+    const highlightIds = new Set([
+      bestStation ? `gaswatch-${bestStation.id}` : null,
+      selectedStationId,
+      selectedAlternativeStationId ? `gaswatch-${selectedAlternativeStationId}` : null
+    ].filter(Boolean))
+    
+    if (highlightIds.size === 0) return mapStations
+    
+    return mapStations.filter(s => highlightIds.has(String(s.id)))
+  }, [mapStations, showOnlySelected, bestStation, selectedStationId, selectedAlternativeStationId])
 
   return (
     <div>
@@ -811,9 +855,20 @@ export default function NearbyPage() {
           {!gaswatchLoading && !gaswatchError && (
             <>
           <div className="mb-6">
+            <div className="mb-4 flex items-center gap-2 bg-card p-3 rounded-lg border border-border">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="rounded border-border text-fuel-green focus:ring-fuel-green"
+                  checked={showOnlySelected}
+                  onChange={(e) => setShowOnlySelected(e.target.checked)}
+                />
+                <span className="text-sm font-medium">Show only selected/recommended stations</span>
+              </label>
+            </div>
             <div className="relative">
               <StationMap
-                stations={mapStations}
+                stations={displayedMapStations}
                 brandStyles={gaswatchBrands}
                 userLat={activeCoords?.lat}
                 userLng={activeCoords?.lng}
@@ -826,6 +881,7 @@ export default function NearbyPage() {
                 containerClassName="-mx-4 sm:-mx-6 lg:-mx-8 z-0"
                 mapClassName="h-80 sm:h-[520px] lg:h-[620px]"
                 routeCoordinates={activeRouteCoordinates}
+                alternativeRouteCoordinates={alternativeRouteCoordinates}
               />
               {selectedStation && (
                 <div className="absolute left-1/2 top-4 z-10 w-[90%] max-w-md -translate-x-1/2 rounded-xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur">
@@ -1145,10 +1201,30 @@ export default function NearbyPage() {
                   )}
                 </div>
 
-                {feasibleStations.slice(0, 5).map((decision, index) => (
-                  <div key={decision.id} className="rounded-lg border border-border p-2">
-                    <div className="font-medium text-foreground">#{index + 1} {decision.name}</div>
-                    <div className="text-muted-foreground">
+                {feasibleStations.slice(0, 10).map((decision, index) => (
+                  <div 
+                    key={decision.id} 
+                    className={`rounded-lg border p-2 cursor-pointer transition-colors ${
+                      selectedAlternativeStationId === decision.id 
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                        : 'border-border hover:bg-muted'
+                    }`}
+                    onClick={() => {
+                      if (selectedAlternativeStationId === decision.id) {
+                        setSelectedAlternativeStationId(null)
+                      } else {
+                        setSelectedAlternativeStationId(decision.id)
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                      }
+                    }}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="font-medium text-foreground">#{index + 1} {decision.name}</div>
+                      {selectedAlternativeStationId === decision.id && (
+                        <div className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded">Viewing Path</div>
+                      )}
+                    </div>
+                    <div className="text-muted-foreground mt-1">
                       J_i PHP {decision.objectiveCost.toFixed(2)} = fuel PHP {(targetFuelLiters * decision.stationPrice).toFixed(2)} + detour PHP {decision.travelFuelCost.toFixed(2)} + time PHP {decision.timeCost.toFixed(2)}
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -145,8 +145,53 @@ export function RoutePlanner() {
   const [calculatingRoute, setCalculatingRoute] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const { geocodeAddress, calculateRoute, loading: geocodingLoading, error } = useRouteCalculation()
+  const [destSuggestions, setDestSuggestions] = useState<RoutePoint[]>([])
+  const [showDestSuggestions, setShowDestSuggestions] = useState(false)
+  const destRef = useRef<HTMLDivElement>(null)
+
+  const [startSuggestions, setStartSuggestions] = useState<RoutePoint[]>([])
+  const [showStartSuggestions, setShowStartSuggestions] = useState(false)
+  const startRef = useRef<HTMLDivElement>(null)
+
+  const { geocodeAddress, fetchAutocompleteSuggestions, calculateRoute, loading: geocodingLoading, error } = useRouteCalculation()
   const { location: userLocation } = useUserLocation()
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (destRef.current && !destRef.current.contains(event.target as Node)) {
+        setShowDestSuggestions(false)
+      }
+      if (startRef.current && !startRef.current.contains(event.target as Node)) {
+        setShowStartSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    const timeout = setTimeout(async () => {
+      if (endAddress.trim() && showDestSuggestions) {
+        const suggestions = await fetchAutocompleteSuggestions(endAddress)
+        setDestSuggestions(suggestions.slice(0, 5))
+      } else {
+        setDestSuggestions([])
+      }
+    }, 400)
+    return () => clearTimeout(timeout)
+  }, [endAddress, fetchAutocompleteSuggestions, showDestSuggestions])
+
+  useEffect(() => {
+    const timeout = setTimeout(async () => {
+      if (startAddress.trim() && showStartSuggestions && startAddress !== 'current') {
+        const suggestions = await fetchAutocompleteSuggestions(startAddress)
+        setStartSuggestions(suggestions.slice(0, 5))
+      } else {
+        setStartSuggestions([])
+      }
+    }, 400)
+    return () => clearTimeout(timeout)
+  }, [startAddress, fetchAutocompleteSuggestions, showStartSuggestions])
 
   const { data: gaswatchData } = useQuery({
     queryKey: ['gaswatch-stations'],
@@ -248,34 +293,77 @@ export function RoutePlanner() {
         <h2 className="text-lg font-semibold mb-4">Plan Your Route</h2>
 
         <form onSubmit={handleCalculateRoute} className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-2 relative" ref={startRef}>
             <label className="text-sm font-medium">Starting Point</label>
             <div className="flex gap-2">
               <Input
                 placeholder="Enter address or search..."
                 value={startAddress}
-                onChange={(e) => setStartAddress(e.target.value)}
+                onChange={(e) => {
+                  setStartAddress(e.target.value)
+                  setShowStartSuggestions(true)
+                }}
+                onFocus={() => setShowStartSuggestions(true)}
               />
               {userLocation && (
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => setStartAddress('current')}
+                  onClick={() => {
+                    setStartAddress('current')
+                    setShowStartSuggestions(false)
+                  }}
                   className="whitespace-nowrap"
                 >
                   📍 Use Current
                 </Button>
               )}
             </div>
+            {showStartSuggestions && startSuggestions.length > 0 && startAddress !== 'current' && (
+              <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-lg">
+                {startSuggestions.map((suggestion, i) => (
+                  <div
+                    key={i}
+                    className="p-2 text-sm cursor-pointer hover:bg-muted"
+                    onClick={() => {
+                      setStartAddress(suggestion.address)
+                      setShowStartSuggestions(false)
+                    }}
+                  >
+                    {suggestion.address}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 relative" ref={destRef}>
             <label className="text-sm font-medium">Destination</label>
             <Input
               placeholder="Enter destination address..."
               value={endAddress}
-              onChange={(e) => setEndAddress(e.target.value)}
+              onChange={(e) => {
+                setEndAddress(e.target.value)
+                setShowDestSuggestions(true)
+              }}
+              onFocus={() => setShowDestSuggestions(true)}
             />
+            {showDestSuggestions && destSuggestions.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-lg">
+                {destSuggestions.map((suggestion, i) => (
+                  <div
+                    key={i}
+                    className="p-2 text-sm cursor-pointer hover:bg-muted"
+                    onClick={() => {
+                      setEndAddress(suggestion.address)
+                      setShowDestSuggestions(false)
+                    }}
+                  >
+                    {suggestion.address}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {(formError || error) && <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{formError ?? error}</div>}

@@ -25,6 +25,7 @@ interface StationMapProps {
   mapClassName?: string
   showMarkerPopup?: boolean
   routeCoordinates?: Array<[number, number]> | Array<Array<[number, number]>> | null
+  alternativeRouteCoordinates?: Array<[number, number]> | Array<Array<[number, number]>> | null
 }
 
 function normalizeRouteCoordinates(coords: Array<[number, number]> | Array<Array<[number, number]>> | unknown): Array<[number, number]> {
@@ -198,6 +199,7 @@ export function StationMap({
   mapClassName,
   showMarkerPopup = true,
   routeCoordinates,
+  alternativeRouteCoordinates,
 }: StationMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<Leaflet.Map | null>(null)
@@ -206,6 +208,7 @@ export function StationMap({
   const userAccuracyLayerRef = useRef<Leaflet.Circle | null>(null)
   const userFovLayerRef = useRef<Leaflet.Polygon | null>(null)
   const routeLayerRef = useRef<Leaflet.Polyline | null>(null)
+  const altRouteLayerRef = useRef<Leaflet.Polyline | null>(null)
   const leafletRef = useRef<typeof Leaflet | null>(null)
   const [mapReady, setMapReady] = useState(false)
 
@@ -335,8 +338,9 @@ export function StationMap({
 
       const markerLayer = leafletWithCluster.markerClusterGroup
         ? leafletWithCluster.markerClusterGroup({
-            maxClusterRadius: 60,
+            maxClusterRadius: 1, // Reduced to 1 to ONLY cluster exact overlapping coordinates
             showCoverageOnHover: false,
+            spiderfyOnMaxZoom: true,
             iconCreateFunction: (cluster: MarkerCluster) => {
               const count = cluster.getChildCount()
               return L.divIcon({
@@ -393,6 +397,10 @@ export function StationMap({
         map.removeLayer(routeLayerRef.current)
         routeLayerRef.current = null
       }
+      if (altRouteLayerRef.current) {
+        map.removeLayer(altRouteLayerRef.current)
+        altRouteLayerRef.current = null
+      }
 
       if (routeCoordinates) {
         const routeCoords = normalizeRouteCoordinates(routeCoordinates)
@@ -405,6 +413,21 @@ export function StationMap({
             weight: 6,
             opacity: 0.8,
             smoothFactor: 1.0,
+          }).addTo(map)
+        }
+      }
+
+      if (alternativeRouteCoordinates) {
+        const altRouteCoords = normalizeRouteCoordinates(alternativeRouteCoordinates)
+        const altCoordinates = altRouteCoords.map((coord) => [coord[1], coord[0]] as [number, number])
+        
+        if (altCoordinates.length >= 2) {
+          altRouteLayerRef.current = L.polyline(altCoordinates, {
+            color: '#3b82f6', // blue-500
+            weight: 5,
+            opacity: 0.8,
+            smoothFactor: 1.0,
+            dashArray: '10, 10'
           }).addTo(map)
         }
       }
@@ -424,7 +447,7 @@ export function StationMap({
     return () => {
       cancelled = true
     }
-  }, [center, centerOnUser, effectiveBrandStyles, hasUserLocation, highlightStationId, onStationSelect, showMarkerPopup, showUserMarker, stations, userHeading, userLat, userLng, routeCoordinates])
+  }, [center, centerOnUser, effectiveBrandStyles, hasUserLocation, highlightStationId, onStationSelect, showMarkerPopup, showUserMarker, stations, userHeading, userLat, userLng, routeCoordinates, alternativeRouteCoordinates])
 
   // Destroy the map when the component unmounts to prevent memory leaks.
   useEffect(() => {
