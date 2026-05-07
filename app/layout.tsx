@@ -44,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <link rel="apple-touch-icon" href="/icons/icon.svg" />
       </head>
-      <body className="min-h-full flex flex-col bg-background text-foreground antialiased">
+      <body className="min-h-full flex flex-col bg-background text-foreground antialiased" suppressHydrationWarning>
         <OfflineIndicator />
         <RootProviders>{children}</RootProviders>
         <InstallPrompt />

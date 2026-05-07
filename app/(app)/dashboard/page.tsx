@@ -13,6 +13,7 @@ import {
   type GaswatchStation,
   type GaswatchPriceWeek,
 } from '@/lib/gaswatchph'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
 import { UserManagementTable } from '@/components/admin/user-management-table'
 import { StationEditor } from '@/components/admin/station-editor'
 import { SystemConfigForm } from '@/components/admin/system-config-form'

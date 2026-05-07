@@ -84,6 +84,17 @@ function getSeedDocuments() {
       merge: true,
     },
     {
+      path: 'stats/global',
+      data: {
+        stationCount: 0,
+        reportCount: 0,
+        userCount: 0,
+        priceSums: {},
+        seededAt: seedTimestamp,
+      },
+      merge: true,
+    },
+    {
       path: '_bootstrap/firestore',
       data: {
         seededAt: seedTimestamp,

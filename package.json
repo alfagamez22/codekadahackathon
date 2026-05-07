@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "firebase:seed": "node scripts/seed-firestore.mjs",
+    "firebase:backfill-stats": "node scripts/backfill-stats.mjs",
     "firebase:bootstrap": "firebase deploy --only firestore && npm run firebase:seed",
     "firebase:bootstrap-crowdsource": "firebase deploy --only firestore && npm run firebase:seed",
     "firebase:sync-sql": "node scripts/sync-sql-to-firestore.mjs",

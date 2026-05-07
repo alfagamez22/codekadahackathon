@@ -1,59 +1,147 @@
 import 'server-only'
+import { FieldValue } from 'firebase-admin/firestore'
 import { getAdminDb } from '../firestore'
-import type { FuelType } from '@/types/station'
 
-export async function getSystemStats() {
-  const db = await getAdminDb()
-  const [stationSnap, reportSnap, userSnap, pricesSnap] = await Promise.all([
-    db.collection('stations').count().get(),
-    db.collection('priceHistory').count().get(),
-    db.collection('users').count().get(),
-    db.collection('fuelPrices').get(),
-  ])
+// ---------------------------------------------------------------------------
+// stats/global — write-time aggregation document
+//
+// Shape:
+//   stationCount:   number  (incremented when a station is created)
+//   reportCount:    number  (incremented when a priceReport is submitted)
+//   userCount:      number  (incremented when a user is created)
+//   averagePrices:  Record<fuelType, { sum: number; count: number }>
+//                           (updated when a fuelPrice doc is written)
+//
+// Reading this doc costs exactly 1 Firestore read regardless of collection size.
+// ---------------------------------------------------------------------------
 
-  const byFuelType = new Map<string, number[]>()
-  for (const doc of pricesSnap.docs) {
-    const { fuelType, currentPrice } = doc.data() as { fuelType: FuelType; currentPrice: number }
-    if (typeof currentPrice !== 'number' || !Number.isFinite(currentPrice)) continue
-    if (!byFuelType.has(fuelType)) byFuelType.set(fuelType, [])
-    byFuelType.get(fuelType)!.push(currentPrice)
+const STATS_DOC = 'stats/global'
+
+export type GlobalStats = {
+  stationCount: number
+  reportCount: number
+  userCount: number
+  averagePrices: { fuelType: string; avgPrice: number }[]
+}
+
+export async function getSystemStats(): Promise<GlobalStats> {
+  const fallback: GlobalStats = { stationCount: 0, reportCount: 0, userCount: 0, averagePrices: [] }
+  let snap
+  try {
+    const db = await getAdminDb()
+    snap = await db.doc(STATS_DOC).get()
+  } catch (err) {
+    const code = (err as { code?: number })?.code
+    if (code === 8) {
+      // RESOURCE_EXHAUSTED — quota exceeded, return cached defaults gracefully
+      console.warn('[analytics] Firestore quota exceeded, returning fallback stats')
+      return fallback
+    }
+    throw err
   }
 
-  const averagePrices = Array.from(byFuelType.entries())
-    .map(([fuelType, prices]) => ({
+  if (!snap.exists) {
+    return fallback
+  }
+
+  const data = snap.data() as {
+    stationCount?: number
+    reportCount?: number
+    userCount?: number
+    priceSums?: Record<string, { sum: number; count: number }>
+  }
+
+  const averagePrices = Object.entries(data.priceSums ?? {})
+    .filter(([, v]) => v.count > 0)
+    .map(([fuelType, { sum, count }]) => ({
       fuelType,
-      avgPrice:
-        Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100,
+      avgPrice: Math.round((sum / count) * 100) / 100,
     }))
-    .sort((a, b) => (a.fuelType || '').localeCompare(b.fuelType || ''))
+    .sort((a, b) => a.fuelType.localeCompare(b.fuelType))
 
   return {
-    stationCount: stationSnap.data().count,
-    reportCount: reportSnap.data().count,
-    userCount: userSnap.data().count,
+    stationCount: data.stationCount ?? 0,
+    reportCount: data.reportCount ?? 0,
+    userCount: data.userCount ?? 0,
     averagePrices,
   }
 }
 
-export async function getTopContributors(limit = 10) {
-  const db = await getAdminDb()
-  const snap = await db
-    .collection('users')
-    .orderBy('confirmedReportCount', 'desc')
-    .limit(limit * 3)
-    .get()
+// ---------------------------------------------------------------------------
+// Write-time helpers — call these from Server Actions / mutations
+// ---------------------------------------------------------------------------
 
-  return snap.docs
-    .map((d) => {
-      const u = d.data()
-      const uid = typeof u.uid === 'string' && u.uid.trim().length > 0 ? u.uid : d.id
-      return {
-        uid,
-        displayName: u.displayName as string | null,
-        confirmedReportCount: u.confirmedReportCount as number,
-        trustScore: u.trustScore as number,
-      }
-    })
-    .sort((a, b) => b.confirmedReportCount - a.confirmedReportCount || b.trustScore - a.trustScore)
-    .slice(0, limit)
+export async function incrementReportCount(): Promise<void> {
+  const db = await getAdminDb()
+  await db.doc(STATS_DOC).set(
+    { reportCount: FieldValue.increment(1) },
+    { merge: true },
+  )
+}
+
+export async function incrementUserCount(): Promise<void> {
+  const db = await getAdminDb()
+  await db.doc(STATS_DOC).set(
+    { userCount: FieldValue.increment(1) },
+    { merge: true },
+  )
+}
+
+export async function incrementStationCount(): Promise<void> {
+  const db = await getAdminDb()
+  await db.doc(STATS_DOC).set(
+    { stationCount: FieldValue.increment(1) },
+    { merge: true },
+  )
+}
+
+/**
+ * Update the running price sum/count for a fuel type.
+ * Call this when a fuelPrice document is created or updated.
+ */
+export async function updatePriceAverage(
+  fuelType: string,
+  newPrice: number,
+  oldPrice?: number,
+): Promise<void> {
+  const db = await getAdminDb()
+  const updates: Record<string, unknown> = {
+    [`priceSums.${fuelType}.sum`]: FieldValue.increment(newPrice - (oldPrice ?? 0)),
+  }
+  if (oldPrice === undefined) {
+    updates[`priceSums.${fuelType}.count`] = FieldValue.increment(1)
+  }
+  await db.doc(STATS_DOC).set(updates, { merge: true })
+}
+
+export async function getTopContributors(limit = 10) {
+  try {
+    const db = await getAdminDb()
+    const snap = await db
+      .collection('users')
+      .orderBy('confirmedReportCount', 'desc')
+      .limit(limit * 3)
+      .get()
+
+    return snap.docs
+      .map((d) => {
+        const u = d.data()
+        const uid = typeof u.uid === 'string' && u.uid.trim().length > 0 ? u.uid : d.id
+        return {
+          uid,
+          displayName: u.displayName as string | null,
+          confirmedReportCount: u.confirmedReportCount as number,
+          trustScore: u.trustScore as number,
+        }
+      })
+      .sort((a, b) => b.confirmedReportCount - a.confirmedReportCount || b.trustScore - a.trustScore)
+      .slice(0, limit)
+  } catch (err) {
+    const code = (err as { code?: number })?.code
+    if (code === 8) {
+      console.warn('[analytics] Firestore quota exceeded, returning empty contributors')
+      return []
+    }
+    throw err
+  }
 }

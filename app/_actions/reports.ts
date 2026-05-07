@@ -5,6 +5,7 @@ import { getAdminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
 import { getCurrentPrices } from '@/lib/firebase-admin/queries/prices'
 import { externalPriceReportSchema, priceReportSchema } from '@/lib/utils/validators'
 import { incrementUserReportCount } from '@/lib/firebase-admin/queries/users'
+import { incrementReportCount } from '@/lib/firebase-admin/queries/analytics'
 import { updateTag } from 'next/cache'
 import { FieldValue, type QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import type { ExternalPriceReportInput, PriceReportInput } from '@/lib/utils/validators'
@@ -110,6 +111,7 @@ export async function submitPriceReportAction(input: PriceReportInput) {
   });
 
   await incrementUserReportCount(session.uid);
+  void incrementReportCount();
   updateTag("reports");
 
   return { success: true, reportId: docRef.id };
@@ -211,6 +213,7 @@ export async function submitExternalPriceReportAction(input: ExternalPriceReport
   })
 
   await incrementUserReportCount(session.uid)
+  void incrementReportCount()
   updateTag('reports')
 
   return { success: true, reportId: docRef.id }
