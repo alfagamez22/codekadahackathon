@@ -52,7 +52,7 @@ const PRICE_ORDER = ['diesel', 'premiumDiesel', 'unleaded', 'egasoline', 'premiu
 const TRINOMA_COORDS: Coordinates = { lat: 14.6528, lng: 121.0329 }
 const TRINOMA_LABEL = 'Trinoma, Quezon City'
 const ETA_TOP_COUNT = 10
-const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY || 'test-key'
+const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY ?? ''
 
 const VEHICLE_MODELS: Record<string, Record<string, string[]>> = {
   Toyota: {
@@ -224,7 +224,7 @@ export default function NearbyPage() {
     }
   }, [])
 
-  const gaswatchStations = gaswatchData?.stations ?? []
+  const gaswatchStations = useMemo(() => gaswatchData?.stations ?? [], [gaswatchData?.stations])
   const activeCoords = locationMode === 'demo' ? TRINOMA_COORDS : coords
   const hasActiveCoords = activeCoords != null
   const stationsWithDistance = useMemo<GaswatchStationWithDistance[]>(() => {
@@ -244,7 +244,6 @@ export default function NearbyPage() {
     return stationsWithDistance
       .filter((station) => (station.distanceKm ?? 0) <= GASWATCH_RADIUS_KM)
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-      .slice(0, 10)
   }, [activeCoords, nearbyOnly, stationsWithDistance])
 
   const mapStations = useMemo<(StationListItem & { prices?: GaswatchPriceMap })[]>(() => {
@@ -276,6 +275,10 @@ export default function NearbyPage() {
       .slice(0, ETA_TOP_COUNT)
   }, [displayedStations, hasActiveCoords])
 
+  const etaStationsKey = useMemo(() => {
+    return etaStations.map((station) => `${station.id}:${station.lat},${station.lng}`).join('|')
+  }, [etaStations])
+
   const etaStationIds = useMemo(() => {
     return new Set(etaStations.map((station) => String(station.id)))
   }, [etaStations])
@@ -298,8 +301,9 @@ export default function NearbyPage() {
   }, [activeCoords, etaByStationId, stationsWithDistance])
 
   useEffect(() => {
-    if (!activeCoords || etaStations.length === 0) {
-      setEtaByStationId({})
+    if (!activeCoords || etaStations.length === 0 || !GEOAPIFY_API_KEY) {
+      setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+      setEtaLoading(false)
       return
     }
 
@@ -331,11 +335,19 @@ export default function NearbyPage() {
         results.forEach((result) => {
           next[result.id] = result.etaMinutes
         })
-        setEtaByStationId(next)
+        setEtaByStationId((prev) => {
+          const prevKeys = Object.keys(prev)
+          const nextKeys = Object.keys(next)
+          if (prevKeys.length !== nextKeys.length) return next
+          for (const key of nextKeys) {
+            if (prev[key] !== next[key]) return next
+          }
+          return prev
+        })
       } catch (err) {
         if (!cancelled) {
           console.error('ETA calculation failed:', err)
-          setEtaByStationId({})
+          setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
         }
       } finally {
         if (!cancelled) setEtaLoading(false)
@@ -347,7 +359,7 @@ export default function NearbyPage() {
     return () => {
       cancelled = true
     }
-  }, [activeCoords, etaStations])
+  }, [activeCoords, etaStations, etaStationsKey])
 
   const handleRecalibrate = () => {
     setLocationMode('device')
@@ -489,7 +501,7 @@ export default function NearbyPage() {
             </Button>
             <div className="text-xs text-muted-foreground">
               {nearbyOnly
-                ? 'Showing stations within 5 km, limited to 10 closest.'
+                ? 'Showing all stations within 5 km.'
                 : 'Showing all stations from GasWatchPH.'}
             </div>
           </div>
