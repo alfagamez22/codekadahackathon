@@ -5,9 +5,6 @@ import getAdminApp from './index'
 async function getAdminDb() {
   const app = await getAdminApp()
   return getFirestore(app)
-async function getAdminDb() {
-  const app = await getAdminApp()
-  return getFirestore(app)
 }
 
 export const defaultSystemConfig = {
@@ -24,8 +21,6 @@ export type SystemConfig = typeof defaultSystemConfig
 export async function getSystemConfig(): Promise<SystemConfig> {
   const db = await getAdminDb()
   const snap = await db.collection('systemConfig').doc('settings').get()
-  const db = await getAdminDb()
-  const snap = await db.collection('systemConfig').doc('settings').get()
 
   if (!snap.exists) {
     return defaultSystemConfig
@@ -37,9 +32,6 @@ export async function getSystemConfig(): Promise<SystemConfig> {
   }
 }
 
-// Proxy that resolves the async db before forwarding every call.
-// Usage: await adminDb.collection('x').then(col => col.doc('y').get())
-// Or for convenience: const db = await getDb(); db.collection(...).doc(...).get()
 export const adminDb = new Proxy({} as any, {
   get(_, prop) {
     if (prop === 'collection' || prop === 'doc') {
@@ -64,5 +56,4 @@ export const adminDb = new Proxy({} as any, {
   },
 })
 
-// Convenience export for code that needs direct db access without the proxy
 export { getAdminDb }
