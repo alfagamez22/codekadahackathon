@@ -6,6 +6,7 @@ import { getCurrentPrices } from '@/lib/firebase-admin/queries/prices'
 import { priceReportSchema } from '@/lib/utils/validators'
 import { incrementUserReportCount } from '@/lib/firebase-admin/queries/users'
 import { updateTag } from 'next/cache'
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore'
 import type { PriceReportInput } from '@/lib/utils/validators'
 
 export async function submitPriceReportAction(input: PriceReportInput) {
