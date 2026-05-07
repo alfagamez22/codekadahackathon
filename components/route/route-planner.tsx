@@ -506,16 +506,18 @@ export function RoutePlanner() {
               <label className="text-sm font-medium">Starting point</label>
               <div className="relative">
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    placeholder="Enter city, mall, street, or landmark"
-                    value={startAddress}
-                    onChange={(e) => {
-                      setStartAddress(e.target.value)
-                      setResolvedStartPoint(null)
-                      setShowStartSuggestions(true)
-                    }}
-                    onFocus={() => setShowStartSuggestions(true)}
-                  />
+                  <div className="flex-1 min-w-0">
+                    <Input
+                      placeholder="Enter city, mall, street, or landmark"
+                      value={startAddress}
+                      onChange={(e) => {
+                        setStartAddress(e.target.value)
+                        setResolvedStartPoint(null)
+                        setShowStartSuggestions(true)
+                      }}
+                      onFocus={() => setShowStartSuggestions(true)}
+                    />
+                  </div>
                   <Button
                     type="button"
                     variant="secondary"

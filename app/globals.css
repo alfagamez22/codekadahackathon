@@ -1,61 +1,128 @@
 @import "tailwindcss";
+@import "remixicon/fonts/remixicon.css";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
   --background: #ffffff;
-  --foreground: #111827;
-  --muted: #6b7280;
+  --foreground: #0a0a0a;
+  --muted: #f9fafb;
+  --muted-foreground: #6b7280;
   --border: #e5e7eb;
   --card: #ffffff;
-  --card-foreground: #111827;
+  --card-foreground: #0a0a0a;
+
+  --accent: #f3f4f6;
+  --accent-foreground: #0a0a0a;
+
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #0a0a0a;
+  --destructive: #dc2626;
+  --input: #e5e7eb;
+  --ring: #0a0a0a;
+  --radius: 0.5rem;
+
+  /* Brand semantic colors */
+  --price-green: #16a34a;
+  --price-green-light: #f0fdf4;
+  --price-red: #dc2626;
+  --price-red-light: #fef2f2;
+  --price-yellow: #d97706;
+  --price-yellow-light: #fffbeb;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-  /* Brand colors */
-  --color-fuel-green: #16a34a;
-  --color-fuel-green-light: #dcfce7;
-  --color-fuel-green-dark: #14532d;
-  --color-fuel-red: #dc2626;
-  --color-fuel-red-light: #fee2e2;
-  --color-fuel-yellow: #d97706;
-  --color-fuel-yellow-light: #fef3c7;
-  --color-fuel-gray: #6b7280;
-  --color-fuel-gray-light: #f3f4f6;
+  --color-price-green: var(--price-green);
+  --color-price-green-light: var(--price-green-light);
+  --color-price-red: var(--price-red);
+  --color-price-red-light: var(--price-red-light);
+  --color-price-yellow: var(--price-yellow);
+  --color-price-yellow-light: var(--price-yellow-light);
 
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist), system-ui, -apple-system, sans-serif;
+
+  --radius-sm: calc(var(--radius) * 0.75);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-xl: calc(var(--radius) * 2);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0f172a;
     --foreground: #f1f5f9;
-    --muted: #94a3b8;
-    --border: #1e293b;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --border: #334155;
     --card: #1e293b;
     --card-foreground: #f1f5f9;
+    --accent: #334155;
+    --accent-foreground: #f1f5f9;
+    --popover: #1e293b;
+    --popover-foreground: #f1f5f9;
+    --primary: #f1f5f9;
+    --primary-foreground: #0f172a;
+    --secondary: #334155;
+    --secondary-foreground: #f1f5f9;
+    --input: #334155;
+    --ring: #94a3b8;
   }
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans, Arial, Helvetica, sans-serif);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Smooth scroll for anchor navigation */
-html {
-  scroll-behavior: smooth;
+::selection {
+  background: #16a34a;
+  color: #ffffff;
 }
 
-/* Leaflet div-icon reset — remove default white box behind custom markers */
+/* Leaflet reset */
 .leaflet-div-icon {
   background: transparent !important;
   border: none !important;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

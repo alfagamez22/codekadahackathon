@@ -1,4 +1,4 @@
-# GasTrackPH
+# GAStos
 
 **Live site:** [codekada-seven.vercel.app]()
 

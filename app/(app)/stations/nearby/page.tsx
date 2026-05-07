@@ -870,9 +870,9 @@ export default function NearbyPage() {
       )}
 
       {locationMode === 'device' && geoLoading && (
-        <div className="text-center py-8 text-muted">
-          <div className="text-3xl mb-2 animate-pulse">📍</div>
-          <div>{statusMessage ?? 'Requesting your location...'}</div>
+        <div className="flex flex-col items-center justify-center py-8">
+          <i className="ri-map-pin-2-line text-3xl text-muted-foreground animate-pulse mb-2" />
+          <p className="text-sm text-muted-foreground">{statusMessage ?? 'Requesting your location...'}</p>
         </div>
       )}
 
@@ -990,7 +990,7 @@ export default function NearbyPage() {
                 highlightStationId={highlightedStationId}
                 onStationSelect={setSelectedStationId}
                 showMarkerPopup={false}
-                containerClassName="-mx-4 sm:-mx-6 lg:-mx-8 z-0"
+                containerClassName="z-0"
                 mapClassName="h-80 sm:h-[520px] lg:h-[620px]"
                 routeCoordinates={activeRouteCoordinates}
                 alternativeRouteCoordinates={alternativeRouteCoordinates}
@@ -1037,9 +1037,14 @@ export default function NearbyPage() {
           </div>
 
           {displayedStations.length === 0 ? (
-            <div className="text-center py-12 text-muted">
-              <div className="text-4xl mb-3">🔍</div>
-              <div>{hasActiveCoords ? 'No stations found within 5 km. Try a wider search.' : 'No stations found yet. Try again later.'}</div>
+            <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-border bg-card">
+              <i className="ri-search-line text-4xl text-muted-foreground mb-3" />
+              <p className="text-sm font-medium text-foreground mb-1">
+                {hasActiveCoords ? 'No stations found within 5 km' : 'No stations found yet'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {hasActiveCoords ? 'Try a wider search.' : 'Try again later.'}
+              </p>
             </div>
           ) : (
             <div className="grid gap-3">

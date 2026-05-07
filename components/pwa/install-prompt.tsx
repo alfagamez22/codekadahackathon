@@ -15,37 +15,56 @@ export function InstallPrompt() {
       const ua = navigator.userAgent
       setIsIos(/iPad|iPhone|iPod/.test(ua) && !/CriOS/.test(ua))
     }, 0)
-
     return () => window.clearTimeout(timeoutId)
   }, [])
 
   if (isInstalled || dismissed) return null
 
+  // Shared card wrapper — fixed, bottom-right on desktop; above mobile nav on mobile
+  const cardClass =
+    'fixed bottom-20 left-4 right-4 z-50 md:bottom-6 md:left-auto md:right-6 md:w-72 rounded-xl border border-border bg-card shadow-xl'
+
   if (isIos && !showIosInstructions) {
     return (
-      <div className="fixed bottom-24 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-background border border-border rounded-xl p-4 shadow-lg z-50">
-        <div className="font-medium text-sm mb-1">Install GasTOS</div>
+      <div className={cardClass}>
+        <div className="p-4 pr-10">
+          <p className="text-sm font-semibold text-foreground mb-1">Install GASTOS</p>
+          <button
+            onClick={() => setShowIosInstructions(true)}
+            className="text-xs text-[#16a34a] hover:underline underline-offset-4"
+          >
+            Tap to see instructions
+          </button>
+        </div>
         <button
-          onClick={() => setShowIosInstructions(true)}
-          className="text-xs text-fuel-green underline"
+          onClick={() => setDismissed(true)}
+          className="absolute top-3 right-3 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          aria-label="Dismiss"
         >
-          Tap to see instructions
+          <i className="ri-close-line text-sm" />
         </button>
-        <button onClick={() => setDismissed(true)} className="absolute top-2 right-2 text-muted text-xs">✕</button>
       </div>
     )
   }
 
   if (isIos && showIosInstructions) {
     return (
-      <div className="fixed bottom-24 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-background border border-border rounded-xl p-4 shadow-lg z-50">
-        <div className="font-medium text-sm mb-2">Install on iPhone / iPad</div>
-        <ol className="text-xs text-muted space-y-1 list-decimal list-inside">
-          <li>Tap the Share button in Safari</li>
-          <li>Scroll down and tap Add to Home Screen</li>
-          <li>Tap Add</li>
-        </ol>
-        <button onClick={() => setDismissed(true)} className="absolute top-2 right-2 text-muted text-xs">✕</button>
+      <div className={cardClass}>
+        <div className="p-4 pr-10">
+          <p className="text-sm font-semibold text-foreground mb-3">Install on iPhone / iPad</p>
+          <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+            <li>Tap the Share button in Safari</li>
+            <li>Scroll down and tap <strong className="text-foreground">Add to Home Screen</strong></li>
+            <li>Tap <strong className="text-foreground">Add</strong></li>
+          </ol>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          className="absolute top-3 right-3 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          aria-label="Dismiss"
+        >
+          <i className="ri-close-line text-sm" />
+        </button>
       </div>
     )
   }
@@ -53,13 +72,24 @@ export function InstallPrompt() {
   if (!canInstall) return null
 
   return (
-    <div className="fixed bottom-24 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-background border border-border rounded-xl p-4 shadow-lg z-50">
-      <div className="font-medium text-sm mb-1">Install GasTOS</div>
-      <p className="text-xs text-muted mb-3">Add to your home screen for quick access and offline use.</p>
-      <div className="flex gap-2">
-        <Button size="sm" onClick={install} className="flex-1">Install</Button>
-        <Button size="sm" variant="ghost" onClick={() => setDismissed(true)}>Not now</Button>
+    <div className={cardClass}>
+      <div className="p-4 pr-10">
+        <p className="text-sm font-semibold text-foreground mb-1">Install GASTOS</p>
+        <p className="text-xs text-muted-foreground mb-3">
+          Add to your home screen for quick access and offline use.
+        </p>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={install} className="flex-1">Install</Button>
+          <Button size="sm" variant="secondary" onClick={() => setDismissed(true)}>Not now</Button>
+        </div>
       </div>
+      <button
+        onClick={() => setDismissed(true)}
+        className="absolute top-3 right-3 p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        aria-label="Dismiss"
+      >
+        <i className="ri-close-line text-sm" />
+      </button>
     </div>
   )
 }

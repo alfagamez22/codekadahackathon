@@ -1,38 +1,105 @@
 import 'server-only'
+import { FieldValue } from 'firebase-admin/firestore'
 import { getAdminDb } from '../firestore'
-import type { FuelType } from '@/types/station'
 
-export async function getSystemStats() {
+// ---------------------------------------------------------------------------
+// stats/global — write-time aggregation document
+//
+// Shape:
+//   stationCount:   number  (incremented when a station is created)
+//   reportCount:    number  (incremented when a priceReport is submitted)
+//   userCount:      number  (incremented when a user is created)
+//   averagePrices:  Record<fuelType, { sum: number; count: number }>
+//                           (updated when a fuelPrice doc is written)
+//
+// Reading this doc costs exactly 1 Firestore read regardless of collection size.
+// ---------------------------------------------------------------------------
+
+const STATS_DOC = 'stats/global'
+
+export type GlobalStats = {
+  stationCount: number
+  reportCount: number
+  userCount: number
+  averagePrices: { fuelType: string; avgPrice: number }[]
+}
+
+export async function getSystemStats(): Promise<GlobalStats> {
   const db = await getAdminDb()
-  const [stationSnap, reportSnap, userSnap, pricesSnap] = await Promise.all([
-    db.collection('stations').count().get(),
-    db.collection('priceHistory').count().get(),
-    db.collection('users').count().get(),
-    db.collection('fuelPrices').get(),
-  ])
+  const snap = await db.doc(STATS_DOC).get()
 
-  const byFuelType = new Map<string, number[]>()
-  for (const doc of pricesSnap.docs) {
-    const { fuelType, currentPrice } = doc.data() as { fuelType: FuelType; currentPrice: number }
-    if (typeof currentPrice !== 'number' || !Number.isFinite(currentPrice)) continue
-    if (!byFuelType.has(fuelType)) byFuelType.set(fuelType, [])
-    byFuelType.get(fuelType)!.push(currentPrice)
+  if (!snap.exists) {
+    return { stationCount: 0, reportCount: 0, userCount: 0, averagePrices: [] }
   }
 
-  const averagePrices = Array.from(byFuelType.entries())
-    .map(([fuelType, prices]) => ({
+  const data = snap.data() as {
+    stationCount?: number
+    reportCount?: number
+    userCount?: number
+    priceSums?: Record<string, { sum: number; count: number }>
+  }
+
+  const averagePrices = Object.entries(data.priceSums ?? {})
+    .filter(([, v]) => v.count > 0)
+    .map(([fuelType, { sum, count }]) => ({
       fuelType,
-      avgPrice:
-        Math.round((prices.reduce((a, b) => a + b, 0) / prices.length) * 100) / 100,
+      avgPrice: Math.round((sum / count) * 100) / 100,
     }))
-    .sort((a, b) => (a.fuelType || '').localeCompare(b.fuelType || ''))
+    .sort((a, b) => a.fuelType.localeCompare(b.fuelType))
 
   return {
-    stationCount: stationSnap.data().count,
-    reportCount: reportSnap.data().count,
-    userCount: userSnap.data().count,
+    stationCount: data.stationCount ?? 0,
+    reportCount: data.reportCount ?? 0,
+    userCount: data.userCount ?? 0,
     averagePrices,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Write-time helpers — call these from Server Actions / mutations
+// ---------------------------------------------------------------------------
+
+export async function incrementReportCount(): Promise<void> {
+  const db = await getAdminDb()
+  await db.doc(STATS_DOC).set(
+    { reportCount: FieldValue.increment(1) },
+    { merge: true },
+  )
+}
+
+export async function incrementUserCount(): Promise<void> {
+  const db = await getAdminDb()
+  await db.doc(STATS_DOC).set(
+    { userCount: FieldValue.increment(1) },
+    { merge: true },
+  )
+}
+
+export async function incrementStationCount(): Promise<void> {
+  const db = await getAdminDb()
+  await db.doc(STATS_DOC).set(
+    { stationCount: FieldValue.increment(1) },
+    { merge: true },
+  )
+}
+
+/**
+ * Update the running price sum/count for a fuel type.
+ * Call this when a fuelPrice document is created or updated.
+ */
+export async function updatePriceAverage(
+  fuelType: string,
+  newPrice: number,
+  oldPrice?: number,
+): Promise<void> {
+  const db = await getAdminDb()
+  const updates: Record<string, unknown> = {
+    [`priceSums.${fuelType}.sum`]: FieldValue.increment(newPrice - (oldPrice ?? 0)),
+  }
+  if (oldPrice === undefined) {
+    updates[`priceSums.${fuelType}.count`] = FieldValue.increment(1)
+  }
+  await db.doc(STATS_DOC).set(updates, { merge: true })
 }
 
 export async function getTopContributors(limit = 10) {

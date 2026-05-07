@@ -44,7 +44,7 @@ export function PhotoUpload({ userId, onUpload }: PhotoUploadProps) {
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
       onClick={() => inputRef.current?.click()}
-      className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-fuel-green transition-colors"
+      className="rounded-lg border-2 border-dashed border-border bg-muted/30 p-8 text-center cursor-pointer hover:border-[#9ca3af] hover:bg-muted/50 transition-colors"
     >
       <input
         ref={inputRef}
@@ -55,11 +55,14 @@ export function PhotoUpload({ userId, onUpload }: PhotoUploadProps) {
       />
       {preview ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={preview} alt="Price evidence" className="mx-auto max-h-40 rounded object-contain" />
+        <img src={preview} alt="Price evidence" className="mx-auto max-h-40 object-contain rounded-md" />
       ) : (
-        <div className="text-muted text-sm">
-          <div className="text-2xl mb-1">📷</div>
-          {uploading ? 'Uploading...' : 'Drag & drop or click to upload photo'}
+        <div className="text-muted-foreground">
+          <i className="ri-camera-3-line text-3xl mb-2 block" />
+          <span className="text-sm">
+            {uploading ? 'Uploading...' : 'Drag & drop or click to upload photo'}
+          </span>
+          <p className="text-xs mt-1 text-muted-foreground/70">Optional — helps confirm the price</p>
         </div>
       )}
     </div>
