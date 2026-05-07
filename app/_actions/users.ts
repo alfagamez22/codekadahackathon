@@ -7,6 +7,11 @@ import { getAdminDb } from '@/lib/firebase-admin/firestore'
 import { upsertUser } from '@/lib/firebase-admin/queries/users'
 import type { UserRole } from '@/types/auth'
 
+async function getAdminDb() {
+  const app = await getAdminApp()
+  return getFirestore(app)
+}
+
 export async function updateProfileAction(data: {
   displayName?: string
   photoURL?: string
@@ -26,6 +31,8 @@ export async function assignRoleAction(targetUserId: string, role: UserRole) {
   await dbUpdateUserRole(targetUserId, role)
   await setUserRole(targetUserId, role)
 
+  const db = await getAdminDb()
+  await db.collection('auditLogs').add({
   const db = await getAdminDb()
   await db.collection('auditLogs').add({
     adminId: session.uid,

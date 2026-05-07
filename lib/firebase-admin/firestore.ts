@@ -5,6 +5,9 @@ import getAdminApp from './index'
 async function getAdminDb() {
   const app = await getAdminApp()
   return getFirestore(app)
+async function getAdminDb() {
+  const app = await getAdminApp()
+  return getFirestore(app)
 }
 
 export const defaultSystemConfig = {
@@ -19,6 +22,8 @@ export const defaultSystemConfig = {
 export type SystemConfig = typeof defaultSystemConfig
 
 export async function getSystemConfig(): Promise<SystemConfig> {
+  const db = await getAdminDb()
+  const snap = await db.collection('systemConfig').doc('settings').get()
   const db = await getAdminDb()
   const snap = await db.collection('systemConfig').doc('settings').get()
 

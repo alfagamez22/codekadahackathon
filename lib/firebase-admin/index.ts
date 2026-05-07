@@ -2,6 +2,7 @@ import 'server-only'
 import { getApps, initializeApp, cert, getApp } from 'firebase-admin/app'
 
 async function getAdminApp() {
+async function getAdminApp() {
   if (getApps().length > 0) return getApp()
 
   const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID
@@ -20,6 +21,9 @@ async function getAdminApp() {
 
   return initializeApp({
     credential: cert({
+      projectId,
+      clientEmail,
+      privateKey: formattedKey,
       projectId,
       clientEmail,
       privateKey: formattedKey,

@@ -27,5 +27,35 @@ export async function readSession(): Promise<SessionUser | null> {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value
   if (!sessionCookie) return null
+  
+  // Dev mode: check if it's a dev session (JSON encoded)
+  try {
+    const devSession = JSON.parse(sessionCookie)
+    if (devSession.uid === 'dev-user-123') {
+      return devSession as SessionUser
+    }
+  } catch {
+    // Not dev mode, continue with Firebase verification
+  }
+  
   return getSessionUser(sessionCookie)
+}
+
+export async function setDevSessionCookie(): Promise<void> {
+  const devSession: SessionUser = {
+    uid: 'dev-user-123',
+    email: 'dev@test.com',
+    displayName: 'Dev User',
+    photoURL: null,
+    role: 'user',
+  }
+  
+  const cookieStore = await cookies()
+  cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(devSession), {
+    maxAge: 14 * 24 * 60 * 60,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+  })
 }

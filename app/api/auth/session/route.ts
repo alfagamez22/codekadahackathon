@@ -18,10 +18,18 @@ export async function POST(request: NextRequest) {
     }
 
     const decoded = await verifyIdToken(idToken)
+    console.log('Decoded Token:', { uid: decoded.uid, email: decoded.email, role: decoded.role })
+    
     const role = resolveUserRole(decoded.email, decoded.role as string | undefined)
+    console.log('Resolved Role:', role)
 
     if (role === 'superadmin' && decoded.role !== 'superadmin') {
-      await setUserRole(decoded.uid, 'superadmin')
+      try {
+        await setUserRole(decoded.uid, 'superadmin')
+        console.log('Superadmin role assigned successfully')
+      } catch (roleError) {
+        console.error('Failed to set superadmin role:', roleError)
+      }
     }
 
     await setSessionCookie(idToken)

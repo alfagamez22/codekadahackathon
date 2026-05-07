@@ -1,9 +1,27 @@
 import { NextResponse } from 'next/server'
+<<<<<<< HEAD
 import { fetchGaswatchScript } from '@/lib/gaswatchph'
 
 export async function GET() {
   try {
     const body = await fetchGaswatchScript()
+=======
+
+const GASWATCHPH_URL = 'https://gaswatchph.com/js/data.js?v=20260505a'
+
+export async function GET() {
+  try {
+    const res = await fetch(GASWATCHPH_URL, { cache: 'no-store' })
+
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: `GasWatchPH request failed (${res.status})` },
+        { status: res.status },
+      )
+    }
+
+    const body = await res.text()
+>>>>>>> 2321e2b4c04c270e04ec48f092a77eaa6b73d49a
 
     return new NextResponse(body, {
       status: 200,
