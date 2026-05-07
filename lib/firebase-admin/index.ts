@@ -1,7 +1,6 @@
 import 'server-only'
-import { getApps, initializeApp, cert, getApp } from 'firebase-admin/app'
+import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app'
 
-async function getAdminApp() {
 async function getAdminApp() {
   if (getApps().length > 0) return getApp()
 
@@ -21,9 +20,6 @@ async function getAdminApp() {
 
   return initializeApp({
     credential: cert({
-      projectId,
-      clientEmail,
-      privateKey: formattedKey,
       projectId,
       clientEmail,
       privateKey: formattedKey,
