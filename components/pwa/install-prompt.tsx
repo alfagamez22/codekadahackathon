@@ -11,8 +11,12 @@ export function InstallPrompt() {
   const [showIosInstructions, setShowIosInstructions] = useState(false)
 
   useEffect(() => {
-    const ua = navigator.userAgent
-    setIsIos(/iPad|iPhone|iPod/.test(ua) && !/CriOS/.test(ua))
+    const timeoutId = window.setTimeout(() => {
+      const ua = navigator.userAgent
+      setIsIos(/iPad|iPhone|iPod/.test(ua) && !/CriOS/.test(ua))
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [])
 
   if (isInstalled || dismissed) return null
@@ -38,8 +42,8 @@ export function InstallPrompt() {
         <div className="font-medium text-sm mb-2">Install on iPhone / iPad</div>
         <ol className="text-xs text-muted space-y-1 list-decimal list-inside">
           <li>Tap the Share button in Safari</li>
-          <li>Scroll down and tap "Add to Home Screen"</li>
-          <li>Tap "Add"</li>
+          <li>Scroll down and tap Add to Home Screen</li>
+          <li>Tap Add</li>
         </ol>
         <button onClick={() => setDismissed(true)} className="absolute top-2 right-2 text-muted text-xs">✕</button>
       </div>

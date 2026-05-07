@@ -10,7 +10,7 @@ interface SignOutButtonProps {
   redirectTo?: string
 }
 
-export function SignOutButton({ redirectTo = '/login' }: SignOutButtonProps) {
+export function SignOutButton({ redirectTo = '/' }: SignOutButtonProps) {
   const router = useRouter()
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)

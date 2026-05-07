@@ -1,19 +1,9 @@
 import { NextResponse } from 'next/server'
-
-const GASWATCHPH_URL = 'https://gaswatchph.com/js/data.js?v=20260505a'
+import { fetchGaswatchScript } from '@/lib/gaswatchph'
 
 export async function GET() {
   try {
-    const res = await fetch(GASWATCHPH_URL, { cache: 'no-store' })
-
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `GasWatchPH request failed (${res.status})` },
-        { status: res.status },
-      )
-    }
-
-    const body = await res.text()
+    const body = await fetchGaswatchScript()
 
     return new NextResponse(body, {
       status: 200,

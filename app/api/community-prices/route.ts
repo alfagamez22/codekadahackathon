@@ -6,14 +6,14 @@ export async function GET() {
   try {
     const response = await fetch(COMMUNITY_PRICES_URL, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { Accept: 'application/json' },
       cache: 'no-store',
     })
 
     if (!response.ok) {
       return NextResponse.json(
         { message: 'Failed to fetch community gas prices.' },
-        { status: response.status }
+        { status: response.status },
       )
     }
 

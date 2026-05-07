@@ -1,6 +1,5 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
 import { db } from '../utils/firestore-admin'
-import sql from '../utils/db'
 import { sendPriceUpdateNotification } from '../utils/notify'
 import { randomUUID } from 'crypto'
 
@@ -14,92 +13,59 @@ export const onReportValidated = onDocumentUpdated('priceReports/{reportId}', as
 
   const { stationId, fuelType, reportedPrice, confirmationCount } = after
   const reportId = event.params.reportId
-  const mirroredAt = new Date().toISOString()
+  const nowIso = new Date().toISOString()
+  const priceDocId = `${stationId}_${fuelType}`
 
-  // Upsert confirmed price to PostgreSQL
-  await sql`
-    INSERT INTO fuel_prices (id, station_id, fuel_type, current_price, source_type, confirmed_report_id, confirmation_count, updated_at)
-    VALUES (${randomUUID()}, ${stationId}::uuid, ${fuelType}, ${reportedPrice}, 'community', ${reportId}, ${confirmationCount ?? 3}, now())
-    ON CONFLICT (station_id, fuel_type) DO UPDATE SET
-      current_price = EXCLUDED.current_price,
-      source_type = 'community',
-      confirmed_report_id = EXCLUDED.confirmed_report_id,
-      confirmation_count = EXCLUDED.confirmation_count,
-      updated_at = now()
-  `
+  const existingSnap = await db.collection('fuelPrices').doc(priceDocId).get()
+  const oldPrice = existingSnap.exists
+    ? (existingSnap.data() as { currentPrice: number }).currentPrice
+    : null
 
-  // Write price history
-  await sql`
-    INSERT INTO price_history (id, station_id, fuel_type, new_price, source_type, report_id, changed_at)
-    VALUES (${randomUUID()}, ${stationId}::uuid, ${fuelType}, ${reportedPrice}, 'community', ${reportId}, now())
-  `
-
-  const currentPriceRows = await sql<{
-    id: string
-    stationId: string
-    fuelType: string
-    currentPrice: number
-    sourceType: string
-    confirmedReportId: string | null
-    confirmationCount: number
-    updatedAt: string
-  }[]>`
-    SELECT
-      id::text,
-      station_id::text AS "stationId",
-      fuel_type AS "fuelType",
-      current_price::float AS "currentPrice",
-      source_type AS "sourceType",
-      confirmed_report_id AS "confirmedReportId",
-      confirmation_count AS "confirmationCount",
-      updated_at AS "updatedAt"
-    FROM fuel_prices
-    WHERE station_id = ${stationId}::uuid AND fuel_type = ${fuelType}
-  `
-
-  const latestHistoryRows = await sql<{
-    id: string
-    stationId: string
-    fuelType: string
-    oldPrice: number | null
-    newPrice: number
-    sourceType: string
-    reportId: string | null
-    changedAt: string
-  }[]>`
-    SELECT
-      id::text,
-      station_id::text AS "stationId",
-      fuel_type AS "fuelType",
-      old_price::float AS "oldPrice",
-      new_price::float AS "newPrice",
-      source_type AS "sourceType",
-      report_id AS "reportId",
-      changed_at AS "changedAt"
-    FROM price_history
-    WHERE station_id = ${stationId}::uuid AND fuel_type = ${fuelType}
-    ORDER BY changed_at DESC, id DESC
-    LIMIT 1
-  `
-
-  if (currentPriceRows[0]) {
-    await db.collection('fuelPrices').doc(currentPriceRows[0].id).set({
-      ...currentPriceRows[0],
-      mirroredAt,
-    }, { merge: true })
+  const priceData = {
+    id: priceDocId,
+    stationId,
+    fuelType,
+    currentPrice: reportedPrice,
+    sourceType: 'community',
+    confirmedReportId: reportId,
+    confirmationCount: confirmationCount ?? 3,
+    updatedAt: nowIso,
   }
 
-  if (latestHistoryRows[0]) {
-    await db.collection('priceHistory').doc(latestHistoryRows[0].id).set({
-      ...latestHistoryRows[0],
-      mirroredAt,
-    }, { merge: true })
+  const historyId = randomUUID()
+  const historyData = {
+    id: historyId,
+    stationId,
+    fuelType,
+    oldPrice,
+    newPrice: reportedPrice,
+    sourceType: 'community',
+    reportId,
+    changedAt: nowIso,
   }
 
-  // Send push notifications to subscribed users
+  await Promise.all([
+    db.collection('fuelPrices').doc(priceDocId).set(priceData),
+    db.collection('priceHistory').doc(historyId).set(historyData),
+    db.collection('stations').doc(stationId).update({
+      [`latestPrices.${fuelType}`]: {
+        price: reportedPrice,
+        sourceType: 'community',
+        badge: 'community-verified',
+        updatedAt: nowIso,
+        confirmationCount: confirmationCount ?? 3,
+      },
+      lastUpdatedAt: nowIso,
+      updatedAt: nowIso,
+    }),
+  ])
+
+  // Send push notifications
   try {
-    const stationDoc = await sql<{ name: string }[]>`SELECT name FROM stations WHERE id = ${stationId}::uuid`
-    const stationName = stationDoc[0]?.name ?? 'Unknown Station'
+    const stationSnap = await db.collection('stations').doc(stationId).get()
+    const stationName = stationSnap.exists
+      ? (stationSnap.data() as { name: string }).name
+      : 'Unknown Station'
 
     const subsSnap = await db.collection('pushSubscriptions').get()
     const tokens: string[] = subsSnap.docs

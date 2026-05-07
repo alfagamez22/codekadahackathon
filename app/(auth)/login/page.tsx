@@ -1,40 +1,24 @@
 import Link from 'next/link'
-import { LoginFormDev } from '@/components/auth/login-form-dev'
+import { LoginForm } from '@/components/auth/login-form'
 import { GoogleSignInButton } from '@/components/auth/google-sign-in-button'
-import { Card } from '@/components/ui/card'
-import type { Metadata } from 'next'
-
-export const metadata: Metadata = { title: 'Sign in' }
 
 export default function LoginPage() {
   return (
-    <Card padding="lg">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Sign in</h1>
-          <p className="text-sm text-muted-foreground mt-1">Track and report fuel prices across the community.</p>
-        </div>
+    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      <h1 className="text-xl font-semibold text-foreground">Sign in</h1>
+      <p className="mt-1 text-sm text-muted">Access your account to view live fuel prices and reports.</p>
 
-        <GoogleSignInButton label="Continue with Google" />
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-          </div>
-        </div>
-
-        <LoginFormDev />
-
-        <p className="text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{' '}
-          <Link href="/register" className="text-primary hover:underline font-medium">
-            Create one
-          </Link>
-        </p>
+      <div className="mt-5 space-y-3">
+        <LoginForm />
+        <GoogleSignInButton />
       </div>
-    </Card>
+
+      <p className="mt-4 text-center text-sm text-muted">
+        Don&apos;t have an account?{' '}
+        <Link href="/register" className="font-medium text-fuel-green hover:underline">
+          Create one
+        </Link>
+      </p>
+    </div>
   )
 }

@@ -34,8 +34,12 @@ export function UserManagementTable({ users }: UserManagementTableProps) {
           </tr>
         </thead>
         <tbody>
-          {users.map((user) => (
-            <tr key={user.uid} className="border-b border-border last:border-0">
+          {users.map((user, i) => {
+            const rowUid = user.uid || user.email || `user-row-${i}`
+            const actionableUid = user.uid || null
+            const isActionDisabled = !actionableUid
+            return (
+            <tr key={rowUid} className="border-b border-border last:border-0">
               <td className="py-3 font-medium">{user.displayName ?? '—'}</td>
               <td className="py-3 text-muted">{user.email ?? '—'}</td>
               <td className="py-3">
@@ -46,19 +50,32 @@ export function UserManagementTable({ users }: UserManagementTableProps) {
               <td className="py-3 text-right">
                 <div className="flex gap-1 justify-end">
                   {user.role !== 'superadmin' && user.role !== 'moderator' && (
-                    <Button size="sm" variant="secondary" onClick={() => handleRoleChange(user.uid, 'moderator')} loading={pending === user.uid}>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => actionableUid && handleRoleChange(actionableUid, 'moderator')}
+                      loading={pending === actionableUid}
+                      disabled={isActionDisabled}
+                    >
                       Make Mod
                     </Button>
                   )}
                   {user.role !== 'superadmin' && user.role !== 'user' && (
-                    <Button size="sm" variant="ghost" onClick={() => handleRoleChange(user.uid, 'user')} loading={pending === user.uid}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => actionableUid && handleRoleChange(actionableUid, 'user')}
+                      loading={pending === actionableUid}
+                      disabled={isActionDisabled}
+                    >
                       Revoke
                     </Button>
                   )}
                 </div>
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>

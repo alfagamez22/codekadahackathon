@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 interface Coords {
   lat: number
@@ -56,7 +56,7 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
     }
 
     const requestPosition = () => {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         loading: true,
         error: null,
@@ -83,7 +83,7 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
             permission: err.code === err.PERMISSION_DENIED ? 'denied' : 'unknown',
           })
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
       )
     }
 
@@ -96,7 +96,7 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
       .query({ name: 'geolocation' })
       .then((result) => {
         if (result.state === 'denied') {
-          setState(prev => ({
+          setState((prev) => ({
             ...prev,
             loading: false,
             error: 'Location access is blocked. Enable it manually in your browser settings.',
@@ -106,35 +106,23 @@ export function useGeolocation(options: GeolocationOptions = {}): GeolocationSta
           return
         }
 
-        if (result.state === 'granted') {
-          setState(prev => ({
-            ...prev,
-            permission: 'granted',
-            statusMessage: 'Permission already granted. Fetching location...',
-          }))
-        } else {
-          setState(prev => ({
-            ...prev,
-            permission: 'prompt',
-            statusMessage: 'Requesting location permission...',
-          }))
-        }
-
+        setState((prev) => ({
+          ...prev,
+          permission: result.state,
+          statusMessage:
+            result.state === 'granted'
+              ? 'Permission already granted. Fetching location...'
+              : 'Requesting location permission...',
+        }))
         requestPosition()
       })
-      .catch(() => {
-        requestPosition()
-      })
+      .catch(() => requestPosition())
   }, [])
 
   useEffect(() => {
     if (!auto) return
-
-    const timeoutId = setTimeout(() => {
-      requestLocation()
-    }, 0)
-
-    return () => clearTimeout(timeoutId)
+    const timeoutId = window.setTimeout(() => requestLocation(), 0)
+    return () => window.clearTimeout(timeoutId)
   }, [auto, requestLocation])
 
   return { ...state, requestLocation }

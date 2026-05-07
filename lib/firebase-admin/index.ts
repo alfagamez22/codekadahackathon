@@ -1,5 +1,5 @@
 import 'server-only'
-import { getApps, initializeApp, cert, getApp, type App } from 'firebase-admin/app'
+import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app'
 
 async function getAdminApp() {
   if (getApps().length > 0) return getApp()
@@ -13,7 +13,7 @@ async function getAdminApp() {
   }
 
   const formattedKey = privateKey.replace(/\\n/g, '\n').replace(/"/g, '').trim()
-  
+
   if (!formattedKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
     console.error('Invalid FIREBASE_ADMIN_PRIVATE_KEY format. Must start with -----BEGIN PRIVATE KEY-----')
   }

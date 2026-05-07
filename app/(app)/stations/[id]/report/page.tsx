@@ -1,5 +1,5 @@
 import { requireAuth } from '@/lib/auth/guards'
-import { getStation } from '@/lib/db/queries/stations'
+import { getStation } from '@/lib/firebase-admin/queries/stations'
 import { PageHeader } from '@/components/layout/page-header'
 import { ReportForm } from '@/components/reports/report-form'
 import { notFound } from 'next/navigation'
