@@ -6,41 +6,42 @@ interface StatsGridProps {
   stats: SystemStats
 }
 
+const cardIcons: Record<string, string> = {
+  Stations: 'ri-gas-station-line',
+  Users: 'ri-group-line',
+  Reports: 'ri-bar-chart-box-line',
+  'Fuel Types': 'ri-database-2-line',
+  'Gasoline Avg': 'ri-money-peso-circle-line',
+  'Diesel Avg': 'ri-oil-line',
+}
+
 export function StatsGrid({ stats }: StatsGridProps) {
   const gasolineAvg = stats.averagePrices.find((p) => p.fuelType === 'gasoline')?.avgPrice
   const dieselAvg = stats.averagePrices.find((p) => p.fuelType === 'diesel')?.avgPrice
 
   const cards = [
-    { label: 'Stations', detail: 'Tracked locations', value: stats.stationCount.toLocaleString(), tone: 'green' },
-    { label: 'Users', detail: 'Registered accounts', value: stats.userCount.toLocaleString(), tone: 'blue' },
-    { label: 'Reports', detail: 'Price submissions', value: stats.reportCount.toLocaleString(), tone: 'amber' },
-    { label: 'Fuel Types', detail: 'With averages', value: stats.averagePrices.length.toLocaleString(), tone: 'slate' },
-    { label: 'Gasoline Avg', detail: 'Current baseline', value: gasolineAvg ? `₱${gasolineAvg.toFixed(2)}` : '—', tone: 'green' },
-    { label: 'Diesel Avg', detail: 'Current baseline', value: dieselAvg ? `₱${dieselAvg.toFixed(2)}` : '—', tone: 'blue' },
+    { label: 'Stations', detail: 'Tracked locations', value: stats.stationCount.toLocaleString() },
+    { label: 'Users', detail: 'Registered accounts', value: stats.userCount.toLocaleString() },
+    { label: 'Reports', detail: 'Price submissions', value: stats.reportCount.toLocaleString() },
+    { label: 'Fuel Types', detail: 'With averages', value: stats.averagePrices.length.toLocaleString() },
+    { label: 'Gasoline Avg', detail: 'Current baseline', value: gasolineAvg ? `₱${gasolineAvg.toFixed(2)}` : '—' },
+    { label: 'Diesel Avg', detail: 'Current baseline', value: dieselAvg ? `₱${dieselAvg.toFixed(2)}` : '—' },
   ]
 
-  const toneClasses: Record<string, string> = {
-    green: 'bg-green-50 border-green-100',
-    blue: 'bg-sky-50 border-sky-100',
-    amber: 'bg-amber-50 border-amber-100',
-    slate: 'bg-slate-50 border-slate-200',
-  }
-
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {cards.map(({ label, detail, value, tone }) => (
-        <div key={label} className={`rounded-xl border p-4 ${toneClasses[tone]}`}>
-          <div className="flex items-center justify-between">
+    <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+      {cards.map(({ label, detail, value }) => (
+        <div key={label} className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-700">{label}</div>
-              <div className="mt-0.5 text-xs text-slate-500">{detail}</div>
+              <div className="text-xs font-medium text-muted-foreground">{label}</div>
+              <div className="text-xs text-muted-foreground/60 mt-0.5">{detail}</div>
             </div>
-            <span className="h-2.5 w-2.5 rounded-full bg-slate-500/40" />
+            <i className={`${cardIcons[label] ?? 'ri-bar-chart-line'} text-xl text-muted-foreground`} />
           </div>
-          <div className="mt-4 text-2xl font-semibold text-slate-950 sm:text-3xl">{value}</div>
+          <div className="text-2xl font-semibold tabular-nums text-foreground">{value}</div>
         </div>
       ))}
     </div>
   )
 }
-

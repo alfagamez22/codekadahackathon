@@ -1,6 +1,7 @@
 import 'server-only'
 import { FieldValue } from 'firebase-admin/firestore'
 import { getAdminDb } from '../firestore'
+import { incrementUserCount } from './analytics'
 import type { UserProfile } from '@/types/auth'
 import type { UserRole } from '@/types/auth'
 
@@ -36,6 +37,7 @@ export async function upsertUser(data: {
       createdAt: nowIso,
       updatedAt: nowIso,
     })
+    void incrementUserCount()
   } else {
     const updates: Record<string, unknown> = { updatedAt: nowIso }
     if (data.displayName !== undefined) updates.displayName = data.displayName

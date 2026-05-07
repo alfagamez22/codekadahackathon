@@ -6,8 +6,8 @@ import { StationCard } from './station-card'
 import { StationFilters } from './station-filters'
 import { StationMap } from './station-map'
 import { StationListSkeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
 import { useUserLocation } from '@/hooks/use-user-location'
+import { cn } from '@/lib/utils'
 import type { StationListItem } from '@/types/station'
 import type { FuelType } from '@/types/station'
 
@@ -38,20 +38,28 @@ export function StationList({ initialStations = [] }: StationListProps) {
   })
 
   const handleFilterChange = useCallback((f: Filters) => setFilters(f), [])
-
   const stations = data?.stations ?? []
 
   return (
     <div>
       <StationFilters onFilterChange={handleFilterChange} />
 
-      <div className="flex gap-2 mb-4">
-        <Button variant={view === 'list' ? 'primary' : 'ghost'} size="sm" onClick={() => setView('list')}>
-          📋 List
-        </Button>
-        <Button variant={view === 'map' ? 'primary' : 'ghost'} size="sm" onClick={() => setView('map')}>
-          🗺️ Map
-        </Button>
+      <div className="flex items-center gap-1 mb-4 p-1 rounded-lg border border-border bg-muted w-fit">
+        {(['list', 'map'] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+              view === v
+                ? 'bg-white text-[#0a0a0a] shadow-sm dark:bg-[#1f2937] dark:text-[#f9fafb]'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <i className={v === 'list' ? 'ri-list-check text-base' : 'ri-map-2-line text-base'} />
+            {v.charAt(0).toUpperCase() + v.slice(1)}
+          </button>
+        ))}
       </div>
 
       {isLoading && <StationListSkeleton />}
@@ -68,9 +76,10 @@ export function StationList({ initialStations = [] }: StationListProps) {
       {!isLoading && view === 'list' && (
         <>
           {stations.length === 0 ? (
-            <div className="text-center py-12 text-muted">
-              <div className="text-4xl mb-3">🔍</div>
-              <div>No stations found. Try adjusting your filters.</div>
+            <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-border bg-card">
+              <i className="ri-search-line text-4xl text-muted-foreground mb-3" />
+              <p className="text-sm font-medium text-foreground mb-1">No stations found</p>
+              <p className="text-xs text-muted-foreground">Try adjusting your filters or search area.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -79,9 +88,9 @@ export function StationList({ initialStations = [] }: StationListProps) {
               ))}
             </div>
           )}
-          <div className="text-xs text-muted text-center mt-4">
+          <p className="text-xs text-muted-foreground text-center mt-4">
             Showing {stations.length} of {data?.total ?? 0} stations
-          </div>
+          </p>
         </>
       )}
     </div>

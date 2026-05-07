@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { submitPriceReportAction } from '@/app/_actions/reports'
 import { formatFuelType } from '@/lib/utils/format'
 import { PhotoUpload } from './photo-upload'
+import { cn } from '@/lib/utils'
 
 interface ReportFormProps {
   stationId: string
@@ -48,7 +49,7 @@ export function ReportForm({ stationId, fuelTypes, userId }: ReportFormProps) {
 
   return (
     <Card>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">Fuel Type</label>
           <div className="flex flex-wrap gap-2">
@@ -57,11 +58,12 @@ export function ReportForm({ stationId, fuelTypes, userId }: ReportFormProps) {
                 key={ft}
                 type="button"
                 onClick={() => setSelectedFuel(ft)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                className={cn(
+                  'px-3 py-1.5 rounded-md text-sm font-medium border transition-colors',
                   selectedFuel === ft
-                    ? 'bg-fuel-green text-white border-fuel-green'
-                    : 'bg-background border-border text-foreground hover:border-fuel-green'
-                }`}
+                    ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]'
+                    : 'bg-background border-border text-foreground hover:bg-muted',
+                )}
               >
                 {formatFuelType(ft)}
               </button>
@@ -86,13 +88,13 @@ export function ReportForm({ stationId, fuelTypes, userId }: ReportFormProps) {
           <PhotoUpload userId={userId} onUpload={setPhotoUrl} />
         </div>
 
-        {error && <p className="text-sm text-fuel-red">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex gap-3">
           <Button type="submit" loading={pending} className="flex-1">
             Submit Report
           </Button>
-          <Button type="button" variant="ghost" onClick={() => router.back()}>
+          <Button type="button" variant="secondary" onClick={() => router.back()}>
             Cancel
           </Button>
         </div>

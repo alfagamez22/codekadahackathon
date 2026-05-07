@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type * as Leaflet from 'leaflet'
 import type { MarkerCluster, MarkerClusterGroup, MarkerClusterGroupOptions } from 'leaflet.markercluster'
 import type { StationListItem } from '@/types/station'
+import type { StationSubmissionListItem } from '@/types/station-submission'
 
 type StationPriceMap = Record<string, number | null | undefined>
 
@@ -25,6 +26,12 @@ interface StationMapProps {
   mapClassName?: string
   showMarkerPopup?: boolean
   routeCoordinates?: Array<[number, number]> | Array<Array<[number, number]>> | null
+  alternativeRouteCoordinates?: Array<[number, number]> | Array<Array<[number, number]>> | null
+  onMapClick?: (coords: { lat: number; lng: number }) => void
+  proposalPoint?: { lat: number; lng: number } | null
+  submissionMarkers?: StationSubmissionListItem[]
+  highlightSubmissionId?: string | null
+  onSubmissionSelect?: (id: string) => void
 }
 
 function normalizeRouteCoordinates(coords: Array<[number, number]> | Array<Array<[number, number]>> | unknown): Array<[number, number]> {
@@ -151,6 +158,40 @@ const getMarkerColors = (station: StationListItem, brandStyles: Record<string, B
   return { background: '#16a34a', text: '#ffffff' }
 }
 
+const createSubmissionIcon = (
+  L: typeof import('leaflet'),
+  submission: StationSubmissionListItem,
+  isHighlighted: boolean,
+) => {
+  const color = submission.status === 'approved' ? '#16a34a' : submission.status === 'rejected' ? '#ef4444' : '#f59e0b'
+  const ring = isHighlighted ? '0 0 0 4px rgba(37,99,235,.35),' : ''
+
+  return L.divIcon({
+    html: `
+      <div style="position:relative;width:34px;height:42px;">
+        <div style="position:absolute;left:2px;top:0;width:30px;height:30px;border-radius:999px;background:${color};color:white;border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;box-shadow:${ring}0 4px 12px rgba(15,23,42,.35);">?</div>
+        <div style="position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:12px solid ${color};"></div>
+      </div>
+    `,
+    className: '',
+    iconSize: [34, 42],
+    iconAnchor: [17, 42],
+  })
+}
+
+const createProposalIcon = (L: typeof import('leaflet')) =>
+  L.divIcon({
+    html: `
+      <div style="position:relative;width:34px;height:42px;">
+        <div style="position:absolute;left:2px;top:0;width:30px;height:30px;border-radius:999px;background:#2563eb;color:white;border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;box-shadow:0 4px 12px rgba(15,23,42,.35);">+</div>
+        <div style="position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:12px solid #2563eb;"></div>
+      </div>
+    `,
+    className: '',
+    iconSize: [34, 42],
+    iconAnchor: [17, 42],
+  })
+
 const getFovPoints = (lat: number, lng: number, heading: number, radiusMeters = 120, halfAngleDeg = 24) => {
   const earthRadiusMeters = 6371000
   const toRad = (value: number) => (value * Math.PI) / 180
@@ -198,6 +239,12 @@ export function StationMap({
   mapClassName,
   showMarkerPopup = true,
   routeCoordinates,
+  alternativeRouteCoordinates,
+  onMapClick,
+  proposalPoint,
+  submissionMarkers = [],
+  highlightSubmissionId,
+  onSubmissionSelect,
 }: StationMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<Leaflet.Map | null>(null)
@@ -206,11 +253,15 @@ export function StationMap({
   const userAccuracyLayerRef = useRef<Leaflet.Circle | null>(null)
   const userFovLayerRef = useRef<Leaflet.Polygon | null>(null)
   const routeLayerRef = useRef<Leaflet.Polyline | null>(null)
+  const altRouteLayerRef = useRef<Leaflet.Polyline | null>(null)
+  const submissionLayerRef = useRef<Leaflet.LayerGroup | null>(null)
+  const proposalLayerRef = useRef<Leaflet.LayerGroup | null>(null)
+  const mapClickHandlerRef = useRef<((event: Leaflet.LeafletMouseEvent) => void) | null>(null)
   const leafletRef = useRef<typeof Leaflet | null>(null)
   const [mapReady, setMapReady] = useState(false)
 
   const hasUserLocation = userLat != null && userLng != null
-  const hasMapData = stations.length > 0 || hasUserLocation
+  const hasMapData = stations.length > 0 || submissionMarkers.length > 0 || Boolean(proposalPoint) || hasUserLocation
   const center = useMemo<[number, number]>(() => {
     if (hasUserLocation) return [userLat, userLng]
     const firstStation = stations[0]
@@ -275,6 +326,19 @@ export function StationMap({
 
       const map = mapInstanceRef.current
 
+      if (mapClickHandlerRef.current) {
+        map.off('click', mapClickHandlerRef.current)
+        mapClickHandlerRef.current = null
+      }
+
+      if (onMapClick) {
+        const handleMapClick = (event: Leaflet.LeafletMouseEvent) => {
+          onMapClick({ lat: event.latlng.lat, lng: event.latlng.lng })
+        }
+        map.on('click', handleMapClick)
+        mapClickHandlerRef.current = handleMapClick
+      }
+
       // ── Step 3: Update user location marker ───────────────────────
       if (userLayerRef.current) {
         map.removeLayer(userLayerRef.current)
@@ -335,8 +399,9 @@ export function StationMap({
 
       const markerLayer = leafletWithCluster.markerClusterGroup
         ? leafletWithCluster.markerClusterGroup({
-            maxClusterRadius: 60,
+            maxClusterRadius: 1, // Reduced to 1 to ONLY cluster exact overlapping coordinates
             showCoverageOnHover: false,
+            spiderfyOnMaxZoom: true,
             iconCreateFunction: (cluster: MarkerCluster) => {
               const count = cluster.getChildCount()
               return L.divIcon({
@@ -393,6 +458,10 @@ export function StationMap({
         map.removeLayer(routeLayerRef.current)
         routeLayerRef.current = null
       }
+      if (altRouteLayerRef.current) {
+        map.removeLayer(altRouteLayerRef.current)
+        altRouteLayerRef.current = null
+      }
 
       if (routeCoordinates) {
         const routeCoords = normalizeRouteCoordinates(routeCoordinates)
@@ -407,6 +476,76 @@ export function StationMap({
             smoothFactor: 1.0,
           }).addTo(map)
         }
+      }
+
+      if (alternativeRouteCoordinates) {
+        const altRouteCoords = normalizeRouteCoordinates(alternativeRouteCoordinates)
+        const altCoordinates = altRouteCoords.map((coord) => [coord[1], coord[0]] as [number, number])
+        
+        if (altCoordinates.length >= 2) {
+          altRouteLayerRef.current = L.polyline(altCoordinates, {
+            color: '#3b82f6', // blue-500
+            weight: 5,
+            opacity: 0.8,
+            smoothFactor: 1.0,
+            dashArray: '10, 10'
+          }).addTo(map)
+        }
+      }
+
+      if (submissionLayerRef.current) {
+        map.removeLayer(submissionLayerRef.current)
+        submissionLayerRef.current = null
+      }
+
+      if (submissionMarkers.length > 0) {
+        const submissionLayer = L.layerGroup()
+        submissionMarkers.forEach((submission) => {
+          const marker = L.marker([submission.latitude, submission.longitude], {
+            icon: createSubmissionIcon(L, submission, submission.id === highlightSubmissionId),
+            zIndexOffset: submission.id === highlightSubmissionId ? 650 : 120,
+          })
+
+          marker.bindPopup(
+            `<div style="min-width:190px;font-size:12px;">
+              <div style="font-weight:700;">${escapeHtml(submission.name)}</div>
+              <div style="color:#64748b;">Pending community validation</div>
+              <div style="margin-top:6px;">Legit ${submission.legitCount}/${submission.legitThreshold} · Not legit ${submission.notLegitCount}/${submission.rejectThreshold}</div>
+            </div>`,
+          )
+
+          if (onSubmissionSelect) {
+            marker.on('click', () => onSubmissionSelect(submission.id))
+          }
+
+          submissionLayer.addLayer(marker)
+        })
+        submissionLayer.addTo(map)
+        submissionLayerRef.current = submissionLayer
+      }
+
+      if (proposalLayerRef.current) {
+        map.removeLayer(proposalLayerRef.current)
+        proposalLayerRef.current = null
+      }
+
+      if (proposalPoint) {
+        const proposalLayer = L.layerGroup()
+        L.circle([proposalPoint.lat, proposalPoint.lng], {
+          radius: 80,
+          color: '#2563eb',
+          fillColor: '#2563eb',
+          fillOpacity: 0.12,
+          weight: 1,
+        }).addTo(proposalLayer)
+        L.marker([proposalPoint.lat, proposalPoint.lng], {
+          icon: createProposalIcon(L),
+          zIndexOffset: 800,
+        })
+          .addTo(proposalLayer)
+          .bindPopup('New station location')
+        proposalLayer.addTo(map)
+        proposalLayerRef.current = proposalLayer
       }
 
       // ── Step 5: Position the map ──────────────────────────────────
@@ -424,7 +563,7 @@ export function StationMap({
     return () => {
       cancelled = true
     }
-  }, [center, centerOnUser, effectiveBrandStyles, hasUserLocation, highlightStationId, onStationSelect, showMarkerPopup, showUserMarker, stations, userHeading, userLat, userLng, routeCoordinates])
+  }, [alternativeRouteCoordinates, center, centerOnUser, effectiveBrandStyles, hasUserLocation, highlightStationId, highlightSubmissionId, onMapClick, onStationSelect, onSubmissionSelect, proposalPoint, routeCoordinates, showMarkerPopup, showUserMarker, stations, submissionMarkers, userHeading, userLat, userLng])
 
   // Destroy the map when the component unmounts to prevent memory leaks.
   useEffect(() => {
@@ -439,6 +578,10 @@ export function StationMap({
       userAccuracyLayerRef.current = null
       userFovLayerRef.current = null
       routeLayerRef.current = null
+      altRouteLayerRef.current = null
+      submissionLayerRef.current = null
+      proposalLayerRef.current = null
+      mapClickHandlerRef.current = null
     }
   }, [])
 

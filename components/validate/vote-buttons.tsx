@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useOptimistic, startTransition } from 'react'
-import { Button } from '@/components/ui/button'
 import { castVoteAction } from '@/app/_actions/validations'
+import { cn } from '@/lib/utils'
 import type { VoteType } from '@/types/report'
 
 interface VoteButtonsProps {
@@ -43,43 +43,43 @@ export function VoteButtons({ reportId, disabled }: VoteButtonsProps) {
   }
 
   if (optimistic.voted || voted) {
-    return <p className="text-sm text-fuel-green font-medium">✓ Vote recorded</p>
+    return (
+      <div className="inline-flex items-center gap-2 rounded-md bg-[#f0fdf4] border border-[#bbf7d0] px-3 py-2 text-sm font-medium text-[#16a34a]">
+        <i className="ri-checkbox-circle-line" />
+        Vote recorded
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant="primary"
+        <button
           onClick={() => handleVote('confirm')}
-          loading={pending}
-          disabled={disabled}
-          className="flex-1"
+          disabled={disabled || pending}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-[#0a0a0a] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1a1a1a] disabled:opacity-50 disabled:pointer-events-none"
         >
-          ✓ Confirm
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
+          <i className="ri-check-line" />
+          Confirm
+        </button>
+        <button
           onClick={() => handleVote('reject')}
-          loading={pending}
-          disabled={disabled}
-          className="flex-1"
+          disabled={disabled || pending}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:pointer-events-none"
         >
-          ✗ Reject
-        </Button>
-        <Button
-          size="sm"
-          variant="danger"
+          <i className="ri-close-line" />
+          Reject
+        </button>
+        <button
           onClick={() => handleVote('flag')}
-          loading={pending}
-          disabled={disabled}
+          disabled={disabled || pending}
+          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#fef2f2] border border-[#fecaca] px-3 py-2 text-sm font-medium text-[#dc2626] transition-colors hover:bg-[#fee2e2] disabled:opacity-50 disabled:pointer-events-none"
         >
-          ⚑ Flag
-        </Button>
+          <i className="ri-flag-line" />
+          Flag
+        </button>
       </div>
-      {error && <p className="text-xs text-fuel-red">{error}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }

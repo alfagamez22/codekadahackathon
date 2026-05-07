@@ -20,9 +20,10 @@ export default function ValidatePage() {
       {loading && <StationListSkeleton />}
 
       {!loading && reports.length === 0 && (
-        <div className="text-center py-12 text-muted">
-          <div className="text-4xl mb-3">✅</div>
-          <div>No pending reports. Check back later.</div>
+        <div className="flex flex-col items-center justify-center py-16 rounded-lg border border-border bg-card">
+          <i className="ri-checkbox-circle-line text-4xl text-[#16a34a] mb-3" />
+          <p className="text-sm font-medium text-foreground mb-1">All caught up</p>
+          <p className="text-xs text-muted-foreground">No pending reports. Check back later.</p>
         </div>
       )}
 
