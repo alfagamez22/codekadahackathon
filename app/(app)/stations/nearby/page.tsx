@@ -147,9 +147,9 @@ const getPriceEntries = (prices: GaswatchPriceMap) => {
 }
 
 export default function NearbyPage() {
-  const { coords, loading: geoLoading, error: geoError, requestLocation, statusMessage, permission } = useGeolocation({ auto: false })
-  const [locationMode, setLocationMode] = useState<'demo' | 'device'>('demo')
-  const [nearbyOnly, setNearbyOnly] = useState(true)
+  const { coords, loading: geoLoading, error: geoError, requestLocation, statusMessage, permission } = useGeolocation({ auto: true })
+  const [locationMode, setLocationMode] = useState<'demo' | 'device'>('device')
+  const [nearbyOnly, setNearbyOnly] = useState(false)
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
   const [etaByStationId, setEtaByStationId] = useState<Record<string, number | null>>({})
   const [etaLoading, setEtaLoading] = useState(false)
@@ -639,6 +639,7 @@ export default function NearbyPage() {
                 userLat={activeCoords?.lat}
                 userLng={activeCoords?.lng}
                 showUserMarker={showUserMarker}
+                centerOnUser={locationMode === 'device' && !!coords}
                 onStationSelect={setSelectedStationId}
                 showMarkerPopup={false}
                 containerClassName="-mx-4 sm:-mx-6 lg:-mx-8 z-0"

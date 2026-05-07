@@ -16,6 +16,7 @@ interface StationMapProps {
   userLat?: number
   userLng?: number
   showUserMarker?: boolean
+  centerOnUser?: boolean
   onStationSelect?: (id: string) => void
   containerClassName?: string
   mapClassName?: string
@@ -101,6 +102,7 @@ export function StationMap({
   userLat,
   userLng,
   showUserMarker = true,
+  centerOnUser = false,
   onStationSelect,
   containerClassName,
   mapClassName,
@@ -109,7 +111,8 @@ export function StationMap({
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<Leaflet.Map | null>(null)
   const markerLayerRef = useRef<MarkerClusterGroup | Leaflet.LayerGroup | null>(null)
-  const userLayerRef = useRef<Leaflet.CircleMarker | null>(null)
+  const userLayerRef = useRef<Leaflet.Marker | null>(null)
+  const userAccuracyLayerRef = useRef<Leaflet.Circle | null>(null)
   const leafletRef = useRef<typeof Leaflet | null>(null)
   const [mapReady, setMapReady] = useState(false)
 
@@ -158,6 +161,7 @@ export function StationMap({
       leafletRef.current = null
       markerLayerRef.current = null
       userLayerRef.current = null
+      userAccuracyLayerRef.current = null
       setMapReady(false)
     }
   }, [center])
@@ -172,13 +176,34 @@ export function StationMap({
       userLayerRef.current = null
     }
 
+    if (userAccuracyLayerRef.current) {
+      map.removeLayer(userAccuracyLayerRef.current)
+      userAccuracyLayerRef.current = null
+    }
+
     if (hasUserLocation && showUserMarker) {
-      userLayerRef.current = L.circleMarker([userLat, userLng], {
-        radius: 8,
-        color: '#16a34a',
-        fillColor: '#16a34a',
-        fillOpacity: 0.4,
-      }).addTo(map).bindPopup('Your location')
+      const userIcon = L.divIcon({
+        html: `<div style="position:relative;width:18px;height:18px;"><span style="position:absolute;inset:-8px;border-radius:999px;background:rgba(37,99,235,0.22);"></span><span style="position:absolute;inset:0;border-radius:999px;background:#2563eb;border:3px solid #ffffff;box-shadow:0 0 0 2px rgba(37,99,235,0.35);"></span></div>`,
+        className: '',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      })
+
+      userLayerRef.current = L.marker([userLat, userLng], { icon: userIcon })
+        .addTo(map)
+        .bindPopup('You are here')
+
+      userAccuracyLayerRef.current = L.circle([userLat, userLng], {
+        radius: 45,
+        color: '#2563eb',
+        weight: 1,
+        fillColor: '#2563eb',
+        fillOpacity: 0.08,
+      }).addTo(map)
+
+      if (centerOnUser) {
+        map.setView([userLat, userLng], Math.max(map.getZoom(), 15))
+      }
     }
 
     if (markerLayerRef.current) {
@@ -238,14 +263,14 @@ export function StationMap({
     markerLayer.addTo(map)
     markerLayerRef.current = markerLayer
 
-    if (stations.length > 0) {
+    if (!centerOnUser && stations.length > 0) {
       const bounds = L.latLngBounds(stations.map((station) => [station.latitude, station.longitude]))
       if (hasUserLocation) bounds.extend([userLat, userLng])
       map.fitBounds(bounds, { padding: [28, 28], maxZoom: 15 })
-    } else {
+    } else if (!centerOnUser) {
       map.setView(center, 13)
     }
-  }, [center, hasUserLocation, onStationSelect, showMarkerPopup, showUserMarker, stations, userLat, userLng])
+  }, [center, centerOnUser, hasUserLocation, onStationSelect, showMarkerPopup, showUserMarker, stations, userLat, userLng])
 
   return (
     <div className={containerClasses}>

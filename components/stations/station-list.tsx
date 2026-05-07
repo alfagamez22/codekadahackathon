@@ -7,6 +7,7 @@ import { StationFilters } from './station-filters'
 import { StationMap } from './station-map'
 import { StationListSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { useUserLocation } from '@/hooks/use-user-location'
 import type { StationListItem } from '@/types/station'
 import type { FuelType } from '@/types/station'
 
@@ -19,6 +20,7 @@ type Filters = { province?: string; brand?: string; fuelType?: FuelType; search?
 export function StationList({ initialStations = [] }: StationListProps) {
   const [filters, setFilters] = useState<Filters>({})
   const [view, setView] = useState<'list' | 'map'>('list')
+  const { location } = useUserLocation()
 
   const { data, isLoading } = useQuery({
     queryKey: ['stations', filters],
@@ -55,7 +57,12 @@ export function StationList({ initialStations = [] }: StationListProps) {
       {isLoading && <StationListSkeleton />}
 
       {!isLoading && view === 'map' && (
-        <StationMap stations={stations} />
+        <StationMap
+          stations={stations}
+          userLat={location?.lat}
+          userLng={location?.lng}
+          showUserMarker
+        />
       )}
 
       {!isLoading && view === 'list' && (
