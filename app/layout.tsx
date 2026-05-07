@@ -19,21 +19,21 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: getAppBaseUrlObject(),
   title: {
-    default: 'Gas Price Tracker PH',
-    template: '%s — Gas Price Tracker PH',
+    default: 'GasTOS',
+    template: '%s — GasTOS',
   },
   description: 'Track, compare, and report fuel prices across stations in the Philippines.',
-  applicationName: 'Gas Price Tracker PH',
+  applicationName: 'GasTOS',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'GasTracker',
+    title: 'GasTOS',
   },
   formatDetection: { telephone: false },
   openGraph: {
     type: 'website',
     locale: 'en_PH',
-    title: 'Gas Price Tracker PH',
+    title: 'GasTOS',
     description: 'Community-powered fuel price tracking for the Philippines.',
   },
 }

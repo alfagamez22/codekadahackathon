@@ -14,8 +14,7 @@ export async function Header() {
         <div className="flex h-14 items-center justify-between gap-4">
           <Link href={session ? '/dashboard' : '/'} className="flex items-center gap-2 font-bold text-fuel-green">
             <span className="text-xl">⛽</span>
-            <span className="hidden sm:inline">Gas Price Tracker PH</span>
-            <span className="sm:hidden">GasTracker</span>
+            <span>GasTOS</span>
           </Link>
 
           {session && (

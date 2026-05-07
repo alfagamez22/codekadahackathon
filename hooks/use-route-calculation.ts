@@ -1,9 +1,24 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import type { RoutePoint, RouteInfo } from '@/types/route'
+import type { GeoapifyRouteResponse, RoutePoint, RouteInfo } from '@/types/route'
+import { getPhilippinesAdjustedDuration } from '@/lib/route-planner-utils'
 
 const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY || 'test-key'
+
+type GeoapifyFeature = {
+  geometry: {
+    coordinates: [number, number]
+  }
+  properties: {
+    formatted?: string
+    name?: string
+  }
+}
+
+type GeoapifyFeatureResponse = {
+  features?: GeoapifyFeature[]
+}
 
 export function useRouteCalculation() {
   const [loading, setLoading] = useState(false)
@@ -20,7 +35,7 @@ export function useRouteCalculation() {
 
       if (!response.ok) throw new Error('Geocoding failed')
 
-      const data = await response.json()
+      const data = (await response.json()) as GeoapifyFeatureResponse
       if (!data.features || data.features.length === 0) {
         setError('Address not found')
         return null
@@ -49,10 +64,10 @@ export function useRouteCalculation() {
       
       if (!response.ok) return []
       
-      const data = await response.json()
+      const data = (await response.json()) as GeoapifyFeatureResponse
       if (!data.features) return []
       
-      return data.features.map((feature: any) => ({
+      return data.features.map((feature) => ({
         lat: feature.geometry.coordinates[1],
         lng: feature.geometry.coordinates[0],
         address: feature.properties.formatted || query,
@@ -72,10 +87,10 @@ export function useRouteCalculation() {
       
       if (!response.ok) return []
       
-      const data = await response.json()
+      const data = (await response.json()) as GeoapifyFeatureResponse
       if (!data.features) return []
       
-      return data.features.map((feature: any) => ({
+      return data.features.map((feature) => ({
         lat: feature.geometry.coordinates[1],
         lng: feature.geometry.coordinates[0],
         address: feature.properties.formatted || feature.properties.name || 'Unknown Location',
@@ -87,14 +102,20 @@ export function useRouteCalculation() {
     }
   }, [])
 
-  const calculateRoute = useCallback(
-    async (start: RoutePoint, end: RoutePoint): Promise<RouteInfo | null> => {
+  const calculateRouteWithWaypoints = useCallback(
+    async (points: RoutePoint[]): Promise<RouteInfo | null> => {
+      if (points.length < 2) return null
+      const start = points[0]
+      const end = points[points.length - 1]
+
       try {
         setLoading(true)
         setError(null)
 
+        const waypoints = points.map((point) => `${point.lat},${point.lng}`).join('|')
+
         const response = await fetch(
-          `https://api.geoapify.com/v1/routing?waypoints=${start.lat},${start.lng}|${end.lat},${end.lng}&mode=drive&apiKey=${GEOAPIFY_API_KEY}`
+          `https://api.geoapify.com/v1/routing?waypoints=${waypoints}&mode=drive&apiKey=${GEOAPIFY_API_KEY}`
         )
 
         if (!response.ok) {
@@ -102,7 +123,7 @@ export function useRouteCalculation() {
           return null
         }
 
-        const data = await response.json()
+        const data = (await response.json()) as GeoapifyRouteResponse
         if (!data.features || data.features.length === 0) {
           setError(`no route for this: ${end.address} based on openstreetmap`)
           return null
@@ -110,13 +131,14 @@ export function useRouteCalculation() {
 
         const route = data.features[0]
         const distanceKm = (route.properties.distance || 0) / 1000
-        const durationMin = Math.round((route.properties.time || 0) / 60)
+        const providerDurationMin = Math.round((route.properties.time || 0) / 60)
 
         return {
           startPoint: start,
           endPoint: end,
           distance: distanceKm,
-          duration: durationMin,
+          duration: getPhilippinesAdjustedDuration(distanceKm, providerDurationMin),
+          providerDuration: providerDurationMin,
           coordinates: route.geometry.coordinates,
         }
       } catch (err) {
@@ -130,5 +152,12 @@ export function useRouteCalculation() {
     []
   )
 
-  return { geocodeAddress, fetchAutocompleteSuggestions, fetchRecommendedDestinations, calculateRoute, loading, error }
+  const calculateRoute = useCallback(
+    async (start: RoutePoint, end: RoutePoint): Promise<RouteInfo | null> => {
+      return calculateRouteWithWaypoints([start, end])
+    },
+    [calculateRouteWithWaypoints]
+  )
+
+  return { geocodeAddress, fetchAutocompleteSuggestions, fetchRecommendedDestinations, calculateRoute, calculateRouteWithWaypoints, loading, error }
 }

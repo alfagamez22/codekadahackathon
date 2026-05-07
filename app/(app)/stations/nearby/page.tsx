@@ -1,14 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { StationMap } from '@/components/stations/station-map'
+import { StationSubmissionPanel } from '@/components/stations/station-submission-panel'
 import { StationListSkeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/page-header'
 import { useGeolocation } from '@/hooks/use-geolocation'
 import type { StationListItem } from '@/types/station'
 import type { GeoapifyRouteResponse } from '@/types/route'
+import type { StationSubmissionListItem } from '@/types/station-submission'
 import { crowdSourcedStations } from '../../../../lib/crowdsourced-stations'
 
 type GaswatchPriceMap = Record<string, number | null>
@@ -70,12 +72,12 @@ const PRICE_ORDER = ['diesel', 'premiumDiesel', 'unleaded', 'egasoline', 'premiu
 const TRINOMA_COORDS: Coordinates = { lat: 14.6528, lng: 121.0329 }
 const TRINOMA_LABEL = 'Trinoma, Quezon City'
 const MAKATI_COORDS: Coordinates = { lat: 14.5547, lng: 121.0244 }
-const MAKATI_LABEL = 'Makati CBD'
 const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY ?? ''
 const DEFAULT_TARGET_FUEL_LITERS = 40
 const DEFAULT_FUEL_CONSUMPTION_VALUE = 8 // km/L
 const DEFAULT_FUEL_CONSUMPTION_UNIT: FuelConsumptionUnit = 'km/L'
 const DEFAULT_TIME_VALUE_PHP_PER_MIN = 2
+const DEFAULT_TRAVEL_MODE: TravelMode = 'ROUNDABOUT'
 const DEFAULT_CURRENT_FUEL_LITERS = 12
 const DEFAULT_RESERVE_FUEL_LITERS = 2
 const DEFAULT_TANK_CAPACITY_LITERS = 45
@@ -228,7 +230,7 @@ export default function NearbyPage() {
   const [fuelConsumptionValue, setFuelConsumptionValue] = useState(DEFAULT_FUEL_CONSUMPTION_VALUE)
   const [fuelConsumptionUnit, setFuelConsumptionUnit] = useState<FuelConsumptionUnit>(DEFAULT_FUEL_CONSUMPTION_UNIT)
   const [timeValuePhpPerMin, setTimeValuePhpPerMin] = useState(DEFAULT_TIME_VALUE_PHP_PER_MIN)
-  const [travelMode, setTravelMode] = useState<TravelMode>('ROUNDABOUT')
+  const [travelMode, setTravelMode] = useState<TravelMode>(DEFAULT_TRAVEL_MODE)
   const [stopInsertionMode, setStopInsertionMode] = useState<StopInsertionMode>('AUTO')
   const [destinationCoords, setDestinationCoords] = useState<Coordinates | null>(MAKATI_COORDS)
   const [homeCoords, setHomeCoords] = useState<Coordinates | null>(null)
@@ -245,6 +247,25 @@ export default function NearbyPage() {
   const [carEngineDisplacement, setCarEngineDisplacement] = useState('')
   const [carTransmission, setCarTransmission] = useState('')
   const [carFuelType, setCarFuelType] = useState('')
+  const [isPlottingStation, setIsPlottingStation] = useState(false)
+  const [draftStationPoint, setDraftStationPoint] = useState<Coordinates | null>(null)
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const resetTravelPurpose = () => {
+      setTravelMode(DEFAULT_TRAVEL_MODE)
+      setStopInsertionMode('AUTO')
+    }
+
+    const timeoutId = window.setTimeout(resetTravelPurpose, 0)
+    window.addEventListener('pageshow', resetTravelPurpose)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.removeEventListener('pageshow', resetTravelPurpose)
+    }
+  }, [])
+
   const {
     data: gaswatchData,
     isLoading: gaswatchLoading,
@@ -270,6 +291,19 @@ export default function NearbyPage() {
     refetchOnWindowFocus: false,
   })
 
+  const {
+    data: stationSubmissionData,
+    refetch: refetchStationSubmissions,
+  } = useQuery({
+    queryKey: ['station-submissions', 'pending'],
+    queryFn: async () => {
+      const res = await fetch('/api/station-submissions?status=pending&limit=200')
+      if (!res.ok) throw new Error('Failed to load station submissions.')
+      return res.json() as Promise<{ submissions: StationSubmissionListItem[] }>
+    },
+    refetchOnWindowFocus: false,
+  })
+
   useEffect(() => {
     if (crowdStations) {
       console.info('Crowd-sourced stations response:', crowdStations)
@@ -284,31 +318,54 @@ export default function NearbyPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const stored = window.localStorage.getItem('vehicleProfile')
-    if (!stored) return
-    try {
-      const parsed = JSON.parse(stored) as VehicleProfile
-      if (!parsed?.brand || !parsed?.model) return
-      setVehicleProfile(parsed)
-      setCarBrand(parsed.brand)
-      setCarType(parsed.type)
-      setCarModel(parsed.model)
-      setCarYear(parsed.year)
-      setCarEngineDisplacement(parsed.engineDisplacementLiters ?? '')
-      setCarTransmission(parsed.transmission ?? '')
-      setCarFuelType(parsed.fuelType ?? '')
-      const normalizedFuel = (parsed.fuelType ?? '').toLowerCase()
-      if (normalizedFuel.includes('diesel')) setSelectedFuelType('diesel')
-      else setSelectedFuelType('unleaded')
-    } catch {
-      return
-    }
+    const timeout = window.setTimeout(() => {
+      const stored = window.localStorage.getItem('vehicleProfile')
+      if (!stored) return
+      try {
+        const parsed = JSON.parse(stored) as VehicleProfile
+        if (!parsed?.brand || !parsed?.model) return
+        setVehicleProfile(parsed)
+        setCarBrand(parsed.brand)
+        setCarType(parsed.type)
+        setCarModel(parsed.model)
+        setCarYear(parsed.year)
+        setCarEngineDisplacement(parsed.engineDisplacementLiters ?? '')
+        setCarTransmission(parsed.transmission ?? '')
+        setCarFuelType(parsed.fuelType ?? '')
+        const normalizedFuel = (parsed.fuelType ?? '').toLowerCase()
+        if (normalizedFuel.includes('diesel')) setSelectedFuelType('diesel')
+        else setSelectedFuelType('unleaded')
+      } catch {
+        return
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timeout)
   }, [])
 
   const gaswatchStations = useMemo(() => gaswatchData?.stations ?? [], [gaswatchData?.stations])
   const gaswatchBrands = useMemo(() => gaswatchData?.brands ?? {}, [gaswatchData?.brands])
   const activeCoords = locationMode === 'demo' ? TRINOMA_COORDS : coords
   const hasActiveCoords = activeCoords != null
+
+  const { data: firestoreNearbyData, refetch: refetchFirestoreNearby } = useQuery({
+    queryKey: ['firebase-nearby-stations', activeCoords?.lat, activeCoords?.lng],
+    queryFn: async () => {
+      if (!activeCoords) return { stations: [] as StationListItem[] }
+      const params = new URLSearchParams({
+        lat: String(activeCoords.lat),
+        lng: String(activeCoords.lng),
+        radius: String(GASWATCH_RADIUS_KM),
+        limit: '50',
+      })
+      const res = await fetch(`/api/stations/nearby?${params.toString()}`)
+      if (!res.ok) throw new Error('Failed to load Firebase stations.')
+      return res.json() as Promise<{ stations: StationListItem[] }>
+    },
+    enabled: Boolean(activeCoords),
+    refetchOnWindowFocus: false,
+  })
+
   const stationsWithDistance = useMemo<GaswatchStationWithDistance[]>(() => {
     if (!activeCoords) return gaswatchStations
 
@@ -329,7 +386,7 @@ export default function NearbyPage() {
   }, [activeCoords, stationsWithDistance])
 
   const mapStations = useMemo<(StationListItem & { prices?: GaswatchPriceMap })[]>(() => {
-    return displayedStations.map((station) => ({
+    const gaswatchMapStations = displayedStations.map((station) => ({
       id: `gaswatch-${station.id}`,
       name: station.name,
       brand: station.brand ?? null,
@@ -342,7 +399,16 @@ export default function NearbyPage() {
       distanceKm: station.distanceKm,
       prices: station.prices,
     }))
-  }, [displayedStations])
+
+    const firebaseStations = (firestoreNearbyData?.stations ?? [])
+      .filter((station) => !String(station.id).startsWith('gaswatch-'))
+      .map((station) => ({
+        ...station,
+        prices: undefined,
+      }))
+
+    return [...gaswatchMapStations, ...firebaseStations]
+  }, [displayedStations, firestoreNearbyData?.stations])
 
   const selectedStation = useMemo(() => {
     if (!selectedStationId) return null
@@ -366,11 +432,13 @@ export default function NearbyPage() {
 
   useEffect(() => {
     if (!activeCoords || etaStations.length === 0 || !GEOAPIFY_API_KEY) {
-      setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
-      setRouteDistanceByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
-      setRouteByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
-      setEtaLoading(false)
-      return
+      const timeout = window.setTimeout(() => {
+        setEtaByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+        setRouteDistanceByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+        setRouteByStationId((prev) => (Object.keys(prev).length === 0 ? prev : {}))
+        setEtaLoading(false)
+      }, 0)
+      return () => window.clearTimeout(timeout)
     }
 
     let cancelled = false
@@ -668,38 +736,40 @@ export default function NearbyPage() {
       if (a.feasible !== b.feasible) return a.feasible ? -1 : 1
       return a.objectiveCost - b.objectiveCost
     })
-  }, [activeCoords, currentFuelLiters, destinationCoords, etaByStationId, fuelConsumptionUnit, fuelConsumptionValue, gaswatchStations, homeCoords, reserveFuelLiters, selectedFuelType, stopInsertionMode, tankCapacityLiters, targetFuelLiters, timeValuePhpPerMin, travelMode])
+  }, [activeCoords, currentFuelLiters, destinationCoords, etaByStationId, fuelConsumptionUnit, fuelConsumptionValue, gaswatchStations, homeCoords, reserveFuelLiters, routeDistanceByStationId, selectedFuelType, stopInsertionMode, tankCapacityLiters, targetFuelLiters, timeValuePhpPerMin, travelMode])
 
   const feasibleStations = modeledStations.filter((station) => station.feasible)
   const bestStation = feasibleStations[0] ?? null
   const nextBestStation = feasibleStations[1] ?? null
   const savingsVsNext = bestStation && nextBestStation ? nextBestStation.objectiveCost - bestStation.objectiveCost : null
-  const highlightedStationId = selectedStationId || (bestStation ? `gaswatch-${bestStation.id}` : null) || selectedAlternativeStationId
-  const activeRouteCoordinates = useMemo(() => {
+  const bestStationId = bestStation?.id ?? null
+  const bestStationMapId = bestStationId ? `gaswatch-${bestStationId}` : null
+  const highlightedStationId = selectedStationId || bestStationMapId || selectedAlternativeStationId
+  const activeRouteCoordinates = (() => {
     if (selectedStationId) {
       const stationKey = selectedStationId.replace('gaswatch-', '')
       if (routeByStationId[stationKey]) return routeByStationId[stationKey]
     }
-    if (bestStation) {
-      const bestKey = String(bestStation.id)
+    if (bestStationId) {
+      const bestKey = String(bestStationId)
       if (routeByStationId[bestKey]) return routeByStationId[bestKey]
     }
     return null
-  }, [bestStation, selectedStationId, routeByStationId])
+  })()
 
-  const alternativeRouteCoordinates = useMemo(() => {
-    if (selectedAlternativeStationId && selectedAlternativeStationId !== selectedStationId && selectedAlternativeStationId !== (bestStation ? `gaswatch-${bestStation.id}` : null)) {
+  const alternativeRouteCoordinates = (() => {
+    if (selectedAlternativeStationId && selectedAlternativeStationId !== selectedStationId && selectedAlternativeStationId !== bestStationMapId) {
       const altKey = String(selectedAlternativeStationId).replace('gaswatch-', '')
       if (routeByStationId[altKey]) return routeByStationId[altKey]
     }
     return null
-  }, [selectedAlternativeStationId, selectedStationId, bestStation, routeByStationId])
+  })()
 
   const displayedMapStations = useMemo(() => {
     if (!showOnlySelected) return mapStations
     
     const highlightIds = new Set([
-      bestStation ? `gaswatch-${bestStation.id}` : null,
+      bestStationMapId,
       selectedStationId,
       selectedAlternativeStationId ? `gaswatch-${selectedAlternativeStationId}` : null
     ].filter(Boolean))
@@ -707,7 +777,31 @@ export default function NearbyPage() {
     if (highlightIds.size === 0) return mapStations
     
     return mapStations.filter(s => highlightIds.has(String(s.id)))
-  }, [mapStations, showOnlySelected, bestStation, selectedStationId, selectedAlternativeStationId])
+  }, [bestStationMapId, mapStations, selectedAlternativeStationId, selectedStationId, showOnlySelected])
+
+  const pendingStationSubmissions = useMemo(() => {
+    const submissions = stationSubmissionData?.submissions ?? []
+    if (!activeCoords) return submissions
+
+    return submissions.filter((submission) => {
+      const distanceKm = getDistanceKm(activeCoords, {
+        lat: submission.latitude,
+        lng: submission.longitude,
+      })
+      return distanceKm <= GASWATCH_RADIUS_KM * 2
+    })
+  }, [activeCoords, stationSubmissionData?.submissions])
+
+  const handleStationMapClick = useCallback((point: Coordinates) => {
+    setDraftStationPoint(point)
+    setIsPlottingStation(false)
+    setSelectedSubmissionId(null)
+  }, [])
+
+  const handleStationSubmissionSaved = useCallback(() => {
+    void refetchStationSubmissions()
+    void refetchFirestoreNearby()
+  }, [refetchFirestoreNearby, refetchStationSubmissions])
 
   return (
     <div>
@@ -745,6 +839,24 @@ export default function NearbyPage() {
                 : 'Not set'}
             </div>
           </div>
+
+          <StationSubmissionPanel
+            isPlotting={isPlottingStation}
+            draftPoint={draftStationPoint}
+            submissions={pendingStationSubmissions}
+            selectedSubmissionId={selectedSubmissionId}
+            onStartPlotting={() => {
+              setIsPlottingStation(true)
+              setSelectedSubmissionId(null)
+            }}
+            onCancelPlotting={() => setIsPlottingStation(false)}
+            onClearDraft={() => {
+              setDraftStationPoint(null)
+              setIsPlottingStation(false)
+            }}
+            onSaved={handleStationSubmissionSaved}
+            onSelectSubmission={setSelectedSubmissionId}
+          />
 
       {locationMode === 'demo' && (
         <div className="bg-card border border-border rounded-lg p-4 mb-6">
@@ -882,6 +994,11 @@ export default function NearbyPage() {
                 mapClassName="h-80 sm:h-[520px] lg:h-[620px]"
                 routeCoordinates={activeRouteCoordinates}
                 alternativeRouteCoordinates={alternativeRouteCoordinates}
+                onMapClick={isPlottingStation ? handleStationMapClick : undefined}
+                proposalPoint={draftStationPoint}
+                submissionMarkers={pendingStationSubmissions}
+                highlightSubmissionId={selectedSubmissionId}
+                onSubmissionSelect={setSelectedSubmissionId}
               />
               {selectedStation && (
                 <div className="absolute left-1/2 top-4 z-10 w-[90%] max-w-md -translate-x-1/2 rounded-xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur">

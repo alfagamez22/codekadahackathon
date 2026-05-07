@@ -24,7 +24,7 @@ export function InstallPrompt() {
   if (isIos && !showIosInstructions) {
     return (
       <div className="fixed bottom-24 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-background border border-border rounded-xl p-4 shadow-lg z-50">
-        <div className="font-medium text-sm mb-1">Install Gas Price Tracker</div>
+        <div className="font-medium text-sm mb-1">Install GasTOS</div>
         <button
           onClick={() => setShowIosInstructions(true)}
           className="text-xs text-fuel-green underline"
@@ -54,7 +54,7 @@ export function InstallPrompt() {
 
   return (
     <div className="fixed bottom-24 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-background border border-border rounded-xl p-4 shadow-lg z-50">
-      <div className="font-medium text-sm mb-1">Install Gas Price Tracker</div>
+      <div className="font-medium text-sm mb-1">Install GasTOS</div>
       <p className="text-xs text-muted mb-3">Add to your home screen for quick access and offline use.</p>
       <div className="flex gap-2">
         <Button size="sm" onClick={install} className="flex-1">Install</Button>

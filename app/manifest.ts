@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Gas Price Tracker PH',
-    short_name: 'GasTracker',
+    name: 'GasTOS',
+    short_name: 'GasTOS',
     description: 'Track and compare fuel prices across stations in the Philippines',
     start_url: '/',
     display: 'standalone',

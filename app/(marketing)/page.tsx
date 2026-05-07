@@ -17,10 +17,10 @@ export default function LandingPage() {
         <div className="mx-auto max-w-3xl">
           <div className="text-6xl mb-4">⛽</div>
           <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
-            Know Before You Go
+            GasTOS
           </h1>
           <p className="text-lg text-muted mb-8 max-w-xl mx-auto">
-            Gas Price Tracker PH is the community-powered app for finding and comparing fuel prices
+            Know before you go with the community-powered app for finding and comparing fuel prices
             across the Philippines — live, accurate, and verified by real people.
           </p>
           <GoogleSignInButton variant="primary" size="lg" className="mx-auto" />

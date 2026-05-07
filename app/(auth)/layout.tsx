@@ -11,7 +11,7 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">⛽</div>
-          <span className="text-xl font-bold text-fuel-green">Gas Price Tracker PH</span>
+          <span className="text-xl font-bold text-fuel-green">GasTOS</span>
         </div>
         {children}
       </div>

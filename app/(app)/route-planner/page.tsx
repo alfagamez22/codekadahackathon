@@ -8,8 +8,8 @@ export default function RoutePlannerPage() {
   return (
     <div>
       <PageHeader
-        title="Route Planner"
-        description="Plan your route and find fuel stations along the way."
+        title="GasTOS Route Planner"
+        description="Plan your route, compare nearby stations, and estimate fuel savings."
       />
       <RoutePlanner />
     </div>

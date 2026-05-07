@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth/guards'
 import { getSystemStats, getTopContributors } from '@/lib/firebase-admin/queries/analytics'
 import { listUsers } from '@/lib/firebase-admin/queries/users'
 import { searchStations } from '@/lib/firebase-admin/queries/stations'
+import { listStationSubmissions } from '@/lib/firebase-admin/queries/station-submissions'
 import { getSystemConfig } from '@/lib/firebase-admin/firestore'
 import { fetchGaswatchScript, parseGaswatchStations, parsePriceHistory, findCurrentWeekPrices, getPhilippineDateString, type GaswatchStation, type GaswatchPriceWeek } from '@/lib/gaswatchph'
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,20 +29,6 @@ const adminPanels: Array<{ id: DashboardPanel; label: string }> = [
   { id: 'config', label: 'Config' },
 ]
 
-const fuelTypeLabels: Record<string, string> = {
-  diesel: 'Diesel',
-  gasoline: 'Regular Gasoline',
-  unleaded: 'Regular Gasoline',
-  premium: 'Premium Gasoline',
-  premium95: 'Premium Gasoline',
-  premium97: 'Premium Gasoline',
-  premiumDiesel: 'Premium Diesel',
-  kerosene: 'Kerosene',
-  lpg: 'LPG',
-}
-
-const fuelTypeOrder = ['diesel', 'gasoline', 'unleaded', 'premium', 'premium95', 'premium97', 'premiumDiesel', 'kerosene', 'lpg']
-
 function isDashboardPanel(value: string | undefined): value is DashboardPanel {
   return value === 'overview' || value === 'users' || value === 'stations' || value === 'config'
 }
@@ -52,23 +39,6 @@ function isAdminSession(session: SessionUser) {
 
 function formatCurrency(value: number | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? `₱${value.toFixed(2)}` : '—'
-}
-
-function formatFuelType(fuelType: string) {
-  return fuelTypeLabels[fuelType] ?? fuelType
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (char) => char.toUpperCase())
-}
-
-function sortAveragePrices(prices: Array<{ fuelType: string; avgPrice: number }>) {
-  return [...prices].sort((a, b) => {
-    const aIndex = fuelTypeOrder.indexOf(a.fuelType)
-    const bIndex = fuelTypeOrder.indexOf(b.fuelType)
-    if (aIndex === -1 && bIndex === -1) return (a.fuelType || '').localeCompare(b.fuelType || '')
-    if (aIndex === -1) return 1
-    if (bIndex === -1) return -1
-    return aIndex - bIndex
-  })
 }
 
 function getPhilippineTimestamp() {
@@ -87,12 +57,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
   const activePanel: DashboardPanel = isAdmin && isDashboardPanel(requestedPanel) ? requestedPanel : 'overview'
   const phTimestamp = getPhilippineTimestamp()
 
-  const [stats, contributors, gaswatchSnapshot, usersData, stationsData, config] = await Promise.all([
+  const [stats, contributors, gaswatchSnapshot, usersData, stationsData, stationSubmissions, config] = await Promise.all([
     getSystemStats(),
     getTopContributors(5),
     activePanel === 'overview' ? getGaswatchSnapshot() : Promise.resolve(null),
     isAdmin && activePanel === 'users' ? listUsers({}) : Promise.resolve(null),
     isAdmin && activePanel === 'stations' ? searchStations({}) : Promise.resolve(null),
+    isAdmin && activePanel === 'stations' ? listStationSubmissions({ status: 'pending', limit: 50 }) : Promise.resolve([]),
     isAdmin && activePanel === 'config' ? getSystemConfig() : Promise.resolve(null),
   ])
 
@@ -140,11 +111,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Da
           activePanel={activePanel}
           users={usersData?.users ?? []}
           stations={stationsData?.stations ?? []}
+          stationSubmissions={stationSubmissions}
           config={config}
         />
       ) : (
         <DashboardOverview
-          stats={stats}
           contributors={contributors}
           gaswatchStations={gaswatchStations}
           priceWeek={priceWeek}
@@ -194,7 +165,6 @@ function DashboardTabs({ activePanel }: { activePanel: DashboardPanel }) {
 }
 
 function DashboardOverview({
-  stats,
   contributors,
   gaswatchStations,
   priceWeek,
@@ -202,7 +172,6 @@ function DashboardOverview({
   isAdmin,
   phTimestamp,
 }: {
-  stats: Awaited<ReturnType<typeof getSystemStats>>
   contributors: Awaited<ReturnType<typeof getTopContributors>>
   gaswatchStations: GaswatchStation[] | null
   priceWeek: GaswatchPriceWeek | null
@@ -213,7 +182,7 @@ function DashboardOverview({
   return (
     <>
       <PriceAutoRefresher />
-      <NationalAveragePrices priceWeek={priceWeek} />
+      <NationalAveragePrices priceWeek={priceWeek} phTimestamp={phTimestamp} />
 
       <GaswatchSourcePanel stations={gaswatchStations} isAdmin={isAdmin} />
 
@@ -260,12 +229,15 @@ const BRAND_LABELS: Record<string, string> = {
   ptt: 'PTT',
 }
 
-function NationalAveragePrices({ priceWeek }: { priceWeek: GaswatchPriceWeek | null }) {
+function NationalAveragePrices({ priceWeek, phTimestamp }: { priceWeek: GaswatchPriceWeek | null; phTimestamp: string }) {
   if (!priceWeek) {
     return (
       <Card>
         <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-          <CardTitle>National Average Prices</CardTitle>
+          <div>
+            <CardTitle>National Average Prices</CardTitle>
+            <p className="mt-0.5 text-xs text-muted">{phTimestamp}</p>
+          </div>
         </CardHeader>
         <div className="rounded-lg border border-border bg-gray-50 p-4 text-sm text-muted">
           No national average prices are available yet.
@@ -281,7 +253,7 @@ function NationalAveragePrices({ priceWeek }: { priceWeek: GaswatchPriceWeek | n
       <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle>National Average Prices</CardTitle>
-          <p className="mt-0.5 text-xs text-muted">Week of {priceWeek.label}</p>
+          <p className="mt-0.5 text-xs text-muted">Week of {priceWeek.label} · {phTimestamp}</p>
         </div>
       </CardHeader>
 
@@ -386,11 +358,13 @@ function AdminPanelContent({
   activePanel,
   users,
   stations,
+  stationSubmissions,
   config,
 }: {
   activePanel: Exclude<DashboardPanel, 'overview'>
   users: Awaited<ReturnType<typeof listUsers>>['users']
   stations: Awaited<ReturnType<typeof searchStations>>['stations']
+  stationSubmissions: Awaited<ReturnType<typeof listStationSubmissions>>
   config: Awaited<ReturnType<typeof getSystemConfig>> | null
 }) {
   if (activePanel === 'users') {
@@ -410,7 +384,7 @@ function AdminPanelContent({
         <CardHeader>
           <CardTitle>Station Management</CardTitle>
         </CardHeader>
-        <StationEditor stations={stations} />
+        <StationEditor stations={stations} stationSubmissions={stationSubmissions} />
       </Card>
     )
   }

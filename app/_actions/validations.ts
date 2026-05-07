@@ -2,9 +2,20 @@
 
 import { requireAuth } from '@/lib/auth/guards'
 import { getAdminDb, getSystemConfig } from '@/lib/firebase-admin/firestore'
+import { upsertConfirmedPrice } from '@/lib/firebase-admin/queries/prices'
 import { voteSchema } from '@/lib/utils/validators'
 import { DocumentSnapshot, FieldValue, Transaction } from 'firebase-admin/firestore'
 import type { VoteType } from '@/types/report'
+import type { FuelType } from '@/types/station'
+
+type ConfirmedPriceUpdate = {
+  stationId: string
+  fuelType: FuelType
+  price: number
+  reportId: string
+  confirmationCount: number
+  reporterId: string | null
+}
 
 export async function castVoteAction(input: { reportId: string; voteType: VoteType }) {
   const session = await requireAuth()
@@ -20,7 +31,7 @@ export async function castVoteAction(input: { reportId: string; voteType: VoteTy
     const reportRef = db.collection('priceReports').doc(reportId)
     const voteRef = reportRef.collection('votes').doc(userId)
 
-    await db.runTransaction(async (tx: Transaction) => {
+    const confirmedPrice = await db.runTransaction(async (tx: Transaction): Promise<ConfirmedPriceUpdate | null> => {
       const reportSnap = (await tx.get(reportRef)) as unknown as DocumentSnapshot
       if (!reportSnap.exists) {
         throw new Error('Report not found')
@@ -59,6 +70,19 @@ export async function castVoteAction(input: { reportId: string; voteType: VoteTy
           update.status = 'confirmed'
           update.confirmationCount = newCount
           update.confirmedAt = nowIso
+          const stationId = String(report.stationId ?? '')
+          const price = Number(report.normalizedPrice ?? report.reportedPrice)
+          if (stationId && Number.isFinite(price)) {
+            tx.update(reportRef, update)
+            return {
+              stationId,
+              fuelType: report.fuelType as FuelType,
+              price,
+              reportId,
+              confirmationCount: newCount,
+              reporterId: typeof report.reporterId === 'string' ? report.reporterId : null,
+            }
+          }
         }
       }
 
@@ -77,7 +101,27 @@ export async function castVoteAction(input: { reportId: string; voteType: VoteTy
       }
 
       tx.update(reportRef, update)
+      return null
     })
+
+    if (confirmedPrice) {
+      await upsertConfirmedPrice({
+        stationId: confirmedPrice.stationId,
+        fuelType: confirmedPrice.fuelType,
+        price: confirmedPrice.price,
+        sourceType: 'community',
+        confirmedReportId: confirmedPrice.reportId,
+        confirmationCount: confirmedPrice.confirmationCount,
+      })
+
+      if (confirmedPrice.reporterId) {
+        await db.collection('users').doc(confirmedPrice.reporterId).update({
+          confirmedReportCount: FieldValue.increment(1),
+          trustScore: FieldValue.increment(5),
+          updatedAt: new Date().toISOString(),
+        })
+      }
+    }
 
     return { success: true }
   } catch (err) {
