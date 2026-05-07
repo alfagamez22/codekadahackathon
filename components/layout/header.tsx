@@ -13,10 +13,9 @@ export async function Header() {
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-sm">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between gap-4">
-          <Link href={session ? '/dashboard' : '/'} className="flex items-center gap-1.5 shrink-0">
-            <span className="rounded-sm bg-[#16a34a] px-1.5 py-0.5 text-xs font-bold text-white leading-tight">GAS</span>
-            <span className="text-sm font-semibold tracking-[-0.01em] text-foreground hidden sm:inline">TOS</span>
-            <span className="text-sm font-semibold text-foreground sm:hidden">TOS</span>
+          <Link href={session ? '/dashboard' : '/'} className="flex items-center gap-0.5 shrink-0">
+            <span className="rounded-md bg-[#16a34a] px-2 py-0.5 text-sm font-black text-white leading-tight tracking-tight">GAS</span>
+            <span className="text-sm font-black text-foreground leading-tight tracking-tight">TOS</span>
           </Link>
 
           {/* Desktop nav */}

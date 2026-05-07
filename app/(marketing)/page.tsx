@@ -37,11 +37,9 @@ export default function LandingPage() {
       <header className="sticky top-0 z-40 border-b border-[#e5e7eb] bg-white/80 backdrop-blur-sm">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-[#0a0a0a]">
-                <i className="ri-gas-station-fill text-xs text-white" />
-              </div>
-              <span className="text-sm font-semibold tracking-[-0.01em] text-[#0a0a0a]">GASTOS</span>
+            <div className="flex items-center gap-0.5">
+              <span className="rounded-md bg-[#16a34a] px-1.5 py-0.5 text-sm font-black text-white leading-tight tracking-tight">GAS</span>
+              <span className="text-sm font-black text-[#0a0a0a] leading-tight tracking-tight">TOS</span>
             </div>
             <Link
               href="/login"
@@ -132,12 +130,10 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-[#e5e7eb] py-6 px-4">
         <div className="mx-auto max-w-5xl flex items-center justify-between text-xs text-[#9ca3af]">
-          <div className="flex items-center gap-2">
-            <div className="flex h-5 w-5 items-center justify-center rounded bg-[#0a0a0a]">
-              <i className="ri-gas-station-fill text-[10px] text-white" />
+          <div className="flex items-center gap-0.5">
+              <span className="rounded-md bg-[#16a34a] px-1.5 py-0.5 text-xs font-black text-white leading-tight tracking-tight">GAS</span>
+              <span className="text-xs font-black text-[#9ca3af] leading-tight tracking-tight">TOS</span>
             </div>
-            <span>GASTOS</span>
-          </div>
           <span>Community-powered fuel price tracking</span>
         </div>
       </footer>
