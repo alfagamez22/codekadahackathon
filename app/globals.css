@@ -126,3 +126,19 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Force light-mode CSS variables inside auth card regardless of OS dark mode */
+.auth-card {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --muted: #f9fafb;
+  --muted-foreground: #6b7280;
+  --border: #e5e7eb;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --input: #e5e7eb;
+  --ring: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+  color: #0a0a0a;
+}
