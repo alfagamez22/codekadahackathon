@@ -401,11 +401,10 @@ export function StationMap({
         
         if (coordinates.length >= 2) {
           routeLayerRef.current = L.polyline(coordinates, {
-            color: '#3b82f6', // blue-500
-            weight: 4,
+            color: '#16a34a', // green-600
+            weight: 6,
             opacity: 0.8,
             smoothFactor: 1.0,
-            dashArray: '10, 10',
           }).addTo(map)
         }
       }
