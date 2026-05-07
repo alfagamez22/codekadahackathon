@@ -34,15 +34,18 @@ type VehicleProfile = {
   transmission: string
   fuelType: string
 }
-type ChatMessage = { role: 'user' | 'assistant'; content: string }
-type AiStationSummary = {
+type RouteBehavior = 0 | 1 | 2
+
+type StationDecision = {
   id: string
   name: string
   brand: string | null
-  area?: string
-  distanceKm?: number
-  etaMinutes: number | null
-  prices: GaswatchPriceMap
+  distanceKm: number
+  etaMinutes: number
+  stationPrice: number
+  objectiveCost: number
+  travelFuelCost: number
+  timeCost: number
 }
 
 const GASWATCH_RADIUS_KM = 5
@@ -51,8 +54,10 @@ const DEFAULT_PROVINCE = 'NCR'
 const PRICE_ORDER = ['diesel', 'premiumDiesel', 'unleaded', 'egasoline', 'premium95', 'premium97', 'kerosene']
 const TRINOMA_COORDS: Coordinates = { lat: 14.6528, lng: 121.0329 }
 const TRINOMA_LABEL = 'Trinoma, Quezon City'
-const ETA_TOP_COUNT = 10
 const GEOAPIFY_API_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY ?? ''
+const DEFAULT_TARGET_FUEL_LITERS = 40
+const DEFAULT_FUEL_CONSUMPTION_L_PER_KM = 0.1
+const DEFAULT_TIME_VALUE_PHP_PER_MIN = 2
 
 const VEHICLE_MODELS: Record<string, Record<string, string[]>> = {
   Toyota: {
@@ -147,13 +152,17 @@ const getPriceEntries = (prices: GaswatchPriceMap) => {
 }
 
 export default function NearbyPage() {
-  const { coords, loading: geoLoading, error: geoError, requestLocation, statusMessage, permission } = useGeolocation({ auto: true })
+  const { coords, heading, loading: geoLoading, error: geoError, requestLocation, statusMessage, permission } = useGeolocation({ auto: true })
   const [locationMode, setLocationMode] = useState<'demo' | 'device'>('device')
-  const [nearbyOnly, setNearbyOnly] = useState(false)
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null)
   const [etaByStationId, setEtaByStationId] = useState<Record<string, number | null>>({})
   const [etaLoading, setEtaLoading] = useState(false)
   const [showUserMarker, setShowUserMarker] = useState(true)
+  const [targetFuelLiters, setTargetFuelLiters] = useState(DEFAULT_TARGET_FUEL_LITERS)
+  const [fuelConsumptionLPerKm, setFuelConsumptionLPerKm] = useState(DEFAULT_FUEL_CONSUMPTION_L_PER_KM)
+  const [timeValuePhpPerMin, setTimeValuePhpPerMin] = useState(DEFAULT_TIME_VALUE_PHP_PER_MIN)
+  const [routeBehavior, setRouteBehavior] = useState<RouteBehavior>(1)
+  const [selectedFuelType, setSelectedFuelType] = useState<string>('diesel')
   const [vehicleProfile, setVehicleProfile] = useState<VehicleProfile | null>(null)
   const [isCarModalOpen, setIsCarModalOpen] = useState(false)
   const [carBrand, setCarBrand] = useState('')
@@ -163,10 +172,6 @@ export default function NearbyPage() {
   const [carEngineDisplacement, setCarEngineDisplacement] = useState('')
   const [carTransmission, setCarTransmission] = useState('')
   const [carFuelType, setCarFuelType] = useState('')
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
-  const [chatLoading, setChatLoading] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
   const {
     data: gaswatchData,
     isLoading: gaswatchLoading,
@@ -219,6 +224,9 @@ export default function NearbyPage() {
       setCarEngineDisplacement(parsed.engineDisplacementLiters ?? '')
       setCarTransmission(parsed.transmission ?? '')
       setCarFuelType(parsed.fuelType ?? '')
+      const normalizedFuel = (parsed.fuelType ?? '').toLowerCase()
+      if (normalizedFuel.includes('diesel')) setSelectedFuelType('diesel')
+      else setSelectedFuelType('unleaded')
     } catch {
       return
     }
@@ -237,14 +245,14 @@ export default function NearbyPage() {
   }, [activeCoords, gaswatchStations])
 
   const displayedStations = useMemo(() => {
-    if (!nearbyOnly || !activeCoords) {
-      return [...stationsWithDistance].sort((a, b) => a.name.localeCompare(b.name))
+    if (!activeCoords) {
+      return []
     }
 
     return stationsWithDistance
       .filter((station) => (station.distanceKm ?? 0) <= GASWATCH_RADIUS_KM)
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-  }, [activeCoords, nearbyOnly, stationsWithDistance])
+  }, [activeCoords, stationsWithDistance])
 
   const mapStations = useMemo<(StationListItem & { prices?: GaswatchPriceMap })[]>(() => {
     return displayedStations.map((station) => ({
@@ -272,7 +280,6 @@ export default function NearbyPage() {
     return [...displayedStations]
       .filter((station) => typeof station.distanceKm === 'number')
       .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-      .slice(0, ETA_TOP_COUNT)
   }, [displayedStations, hasActiveCoords])
 
   const etaStationsKey = useMemo(() => {
@@ -282,23 +289,6 @@ export default function NearbyPage() {
   const etaStationIds = useMemo(() => {
     return new Set(etaStations.map((station) => String(station.id)))
   }, [etaStations])
-
-  const aiStations = useMemo<AiStationSummary[]>(() => {
-    if (!activeCoords) return []
-    return [...stationsWithDistance]
-      .filter((station) => typeof station.distanceKm === 'number')
-      .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0))
-      .slice(0, ETA_TOP_COUNT)
-      .map((station) => ({
-        id: String(station.id),
-        name: station.name,
-        brand: station.brand ?? null,
-        area: station.area,
-        distanceKm: station.distanceKm,
-        etaMinutes: etaByStationId[String(station.id)] ?? null,
-        prices: station.prices,
-      }))
-  }, [activeCoords, etaByStationId, stationsWithDistance])
 
   useEffect(() => {
     if (!activeCoords || etaStations.length === 0 || !GEOAPIFY_API_KEY) {
@@ -372,10 +362,6 @@ export default function NearbyPage() {
     setShowUserMarker(true)
   }
 
-  const handleToggleNearby = () => {
-    setNearbyOnly((prev) => !prev)
-  }
-
   const handleOpenCarModal = () => {
     setIsCarModalOpen(true)
   }
@@ -435,45 +421,51 @@ export default function NearbyPage() {
       carFuelType
   )
 
-  const aiContext = useMemo(() => {
-    return {
-      location: locationLabel,
-      vehicle: vehicleProfile,
-      stations: aiStations,
-    }
-  }, [aiStations, locationLabel, vehicleProfile])
+  const modeledStations = useMemo<StationDecision[]>(() => {
+    const entries = displayedStations
+      .map((station) => {
+        const stationId = String(station.id)
+        const stationPrice = station.prices[selectedFuelType]
+        if (typeof stationPrice !== 'number') return null
 
-  const handleSendChat = async () => {
-    const trimmed = chatInput.trim()
-    if (!trimmed || chatLoading || aiStations.length === 0) return
-    const nextMessages: ChatMessage[] = [...chatMessages, { role: 'user', content: trimmed }]
-    setChatMessages(nextMessages)
-    setChatInput('')
-    setChatError(null)
-    setChatLoading(true)
+        const distanceKm = station.distanceKm ?? getDistanceKm(activeCoords ?? TRINOMA_COORDS, { lat: station.lat, lng: station.lng })
+        const etaMinutes = etaByStationId[stationId] ?? Math.max(1, Math.round((distanceKm / 30) * 60))
 
-    try {
-      const response = await fetch('/api/ai/station-recommendation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: nextMessages, context: aiContext }),
+        return {
+          id: stationId,
+          name: station.name,
+          brand: station.brand ?? null,
+          distanceKm,
+          etaMinutes,
+          stationPrice,
+        }
       })
+      .filter((entry): entry is NonNullable<typeof entry> => entry != null)
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(errorText || 'AI request failed')
+    if (entries.length === 0) return []
+
+    const pCurrent = entries.reduce((sum, entry) => sum + entry.stationPrice, 0) / entries.length
+
+    const scored = entries.map((entry) => {
+      const travelFuelCost = fuelConsumptionLPerKm * (entry.distanceKm * routeBehavior) * pCurrent
+      const timeCost = entry.etaMinutes * routeBehavior * timeValuePhpPerMin
+      const objectiveCost = targetFuelLiters * entry.stationPrice + travelFuelCost + timeCost
+
+      return {
+        ...entry,
+        objectiveCost,
+        travelFuelCost,
+        timeCost,
       }
+    })
 
-      const data = (await response.json()) as { reply?: string }
-      const reply = data.reply?.trim() || 'No response yet.'
-      setChatMessages((prev) => [...prev, { role: 'assistant', content: reply }])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'AI request failed'
-      setChatError(message)
-    } finally {
-      setChatLoading(false)
-    }
-  }
+    return scored.sort((a, b) => a.objectiveCost - b.objectiveCost)
+  }, [activeCoords, displayedStations, etaByStationId, fuelConsumptionLPerKm, routeBehavior, selectedFuelType, targetFuelLiters, timeValuePhpPerMin])
+
+  const bestStation = modeledStations[0] ?? null
+  const nextBestStation = modeledStations[1] ?? null
+  const netSavings = bestStation && nextBestStation ? nextBestStation.objectiveCost - bestStation.objectiveCost : null
+  const highlightedStationId = bestStation ? `gaswatch-${bestStation.id}` : null
 
   return (
     <div>
@@ -485,30 +477,18 @@ export default function NearbyPage() {
         <div>
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <Button
-              variant={nearbyOnly ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={handleToggleNearby}
-              aria-pressed={nearbyOnly}
-            >
-              {nearbyOnly ? 'Nearby only: On' : 'Nearby only: Off'}
-            </Button>
-            <Button
               variant="primary"
               size="sm"
               onClick={handleOpenCarModal}
             >
               {vehicleProfile ? 'Edit car' : 'Set car'}
             </Button>
-            <div className="text-xs text-muted-foreground">
-              {nearbyOnly
-                ? 'Showing all stations within 5 km.'
-                : 'Showing all stations from GasWatchPH.'}
-            </div>
+            <div className="text-xs text-muted-foreground">Showing all stations within 5 km of your location.</div>
           </div>
 
           <div className="mb-6 grid gap-2 rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground sm:grid-cols-4">
             <div>
-              <span className="font-medium text-foreground">Mode:</span> {nearbyOnly ? 'Nearby only' : 'All stations'}
+              <span className="font-medium text-foreground">Mode:</span> Nearby only (5 km)
             </div>
             <div>
               <span className="font-medium text-foreground">Location:</span> {locationLabel}
@@ -638,8 +618,10 @@ export default function NearbyPage() {
                 stations={mapStations}
                 userLat={activeCoords?.lat}
                 userLng={activeCoords?.lng}
+                userHeading={locationMode === 'device' ? heading : null}
                 showUserMarker={showUserMarker}
                 centerOnUser={locationMode === 'device' && !!coords}
+                highlightStationId={highlightedStationId}
                 onStationSelect={setSelectedStationId}
                 showMarkerPopup={false}
                 containerClassName="-mx-4 sm:-mx-6 lg:-mx-8 z-0"
@@ -743,9 +725,9 @@ export default function NearbyPage() {
         <aside className="h-fit rounded-xl border border-border bg-card p-4 lg:sticky lg:top-24">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold text-foreground">AI Station Advisor</div>
+              <div className="text-sm font-semibold text-foreground">Smart Station Optimizer</div>
               <div className="text-xs text-muted-foreground">
-                Uses top {aiStations.length} nearby stations and your vehicle profile.
+                Automatic ranking based on fuel price, ETA, distance, and route behavior.
               </div>
             </div>
             <Button variant="ghost" size="sm" onClick={handleOpenCarModal}>
@@ -755,56 +737,118 @@ export default function NearbyPage() {
 
           <div className="mt-4 rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
             <div><span className="font-medium text-foreground">Location:</span> {locationLabel}</div>
-            <div><span className="font-medium text-foreground">Stations:</span> {aiStations.length}</div>
+            <div><span className="font-medium text-foreground">Stations in 5km:</span> {displayedStations.length}</div>
             <div><span className="font-medium text-foreground">Vehicle:</span> {vehicleProfile ? 'Set' : 'Not set'}</div>
           </div>
 
-          <div className="mt-4 max-h-[50vh] overflow-y-auto rounded-lg border border-border bg-background p-3">
-            {chatMessages.length === 0 ? (
-              <div className="text-xs text-muted-foreground">
-                Ask the AI to pick the best station based on price, ETA, and your vehicle profile.
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {chatMessages.map((message, index) => (
-                  <div
-                    key={`${message.role}-${index}`}
-                    className={`rounded-lg px-3 py-2 text-xs ${message.role === 'user' ? 'bg-fuel-green text-white ml-auto' : 'bg-muted/40 text-foreground'}`}
-                  >
-                    {message.content}
-                  </div>
+          <div className="mt-4 grid gap-3 rounded-lg border border-border bg-background p-3 text-xs">
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Fuel type
+              <select
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={selectedFuelType}
+                onChange={(event) => setSelectedFuelType(event.target.value)}
+              >
+                {PRICE_ORDER.map((fuelType) => (
+                  <option key={fuelType} value={fuelType}>
+                    {formatGaswatchFuel(fuelType)}
+                  </option>
                 ))}
-                {chatLoading && (
-                  <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-foreground">Thinking...</div>
-                )}
-              </div>
-            )}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              F (liters to fill)
+              <input
+                type="number"
+                min="1"
+                step="1"
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={targetFuelLiters}
+                onChange={(event) => setTargetFuelLiters(Number(event.target.value) || DEFAULT_TARGET_FUEL_LITERS)}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              C (L/km fuel consumption)
+              <input
+                type="number"
+                min="0.02"
+                step="0.01"
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={fuelConsumptionLPerKm}
+                onChange={(event) => setFuelConsumptionLPerKm(Number(event.target.value) || DEFAULT_FUEL_CONSUMPTION_L_PER_KM)}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Vt (PHP/min time value)
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={timeValuePhpPerMin}
+                onChange={(event) => setTimeValuePhpPerMin(Number(event.target.value) || DEFAULT_TIME_VALUE_PHP_PER_MIN)}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 text-muted-foreground">
+              Route behavior coefficient (R)
+              <select
+                className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
+                value={routeBehavior}
+                onChange={(event) => setRouteBehavior(Number(event.target.value) as RouteBehavior)}
+              >
+                <option value={0}>0 - Pass-through</option>
+                <option value={1}>1 - Detour / return to route</option>
+                <option value={2}>2 - Dedicated round trip</option>
+              </select>
+            </label>
           </div>
 
-          {chatError && (
-            <div className="mt-2 text-xs text-fuel-red">{chatError}</div>
-          )}
+          <div className="mt-3 rounded-lg border border-border bg-background p-3 text-xs text-muted-foreground">
+            <div className="font-medium text-foreground">Objective function</div>
+            <div className="mt-1">J_i = (F * P_i) + (D_i * R * C * P_curr) + (T_i * R * V_t)</div>
+          </div>
 
-          <div className="mt-3">
-            <textarea
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-              rows={3}
-              placeholder="Ask: Which station is best for my car today?"
-              value={chatInput}
-              onChange={(event) => setChatInput(event.target.value)}
-            />
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleSendChat}
-                disabled={chatLoading || !chatInput.trim() || aiStations.length === 0}
-              >
-                Ask AI
-              </Button>
-              <div className="text-[11px] text-muted-foreground">
-                {aiStations.length === 0 ? 'No nearby stations available yet.' : 'Uses top 10 nearby stations.'}
+          <div className="mt-3 max-h-[40vh] overflow-y-auto rounded-lg border border-border bg-background p-3 text-xs">
+            {bestStation ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-fuel-green/30 bg-fuel-green/10 p-3">
+                  <div className="font-semibold text-foreground">Best for the buck: {bestStation.name}</div>
+                  <div className="text-muted-foreground">
+                    J* = PHP {bestStation.objectiveCost.toFixed(2)} | ETA {bestStation.etaMinutes} min | {bestStation.distanceKm.toFixed(2)} km
+                  </div>
+                  {netSavings != null && (
+                    <div className="mt-1 text-fuel-green font-medium">Estimated advantage vs next option: PHP {netSavings.toFixed(2)}</div>
+                  )}
+                </div>
+
+                {modeledStations.slice(0, 5).map((decision, index) => (
+                  <div key={decision.id} className="rounded-lg border border-border p-2">
+                    <div className="font-medium text-foreground">#{index + 1} {decision.name}</div>
+                    <div className="text-muted-foreground">
+                      J_i PHP {decision.objectiveCost.toFixed(2)} = fuel PHP {(targetFuelLiters * decision.stationPrice).toFixed(2)} + travel PHP {decision.travelFuelCost.toFixed(2)} + time PHP {decision.timeCost.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
               </div>
+            ) : null}
+            {!bestStation && (
+              <div className="text-muted-foreground">No eligible stations with {formatGaswatchFuel(selectedFuelType)} pricing found within 5 km yet.</div>
+            )}
+            {bestStation && nextBestStation == null && (
+              <div className="text-muted-foreground">Only one station currently has the required pricing for this fuel type.</div>
+            )}
+            {!GEOAPIFY_API_KEY && (
+              <div className="text-fuel-red">Set NEXT_PUBLIC_GEOAPIFY_API_KEY to enable live ETA in the objective function.</div>
+            )}
+            {etaLoading && (
+              <div className="text-muted-foreground">Refreshing ETA and objective score...</div>
+            )}
+            <div className="text-[11px] text-muted-foreground">
+              R modes: 0 pass-through, 1 detour, 2 dedicated trip.
             </div>
           </div>
         </aside>

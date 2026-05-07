@@ -15,12 +15,34 @@ interface StationMapProps {
   stations: StationMapItem[]
   userLat?: number
   userLng?: number
+  userHeading?: number | null
   showUserMarker?: boolean
   centerOnUser?: boolean
+  highlightStationId?: string | null
   onStationSelect?: (id: string) => void
   containerClassName?: string
   mapClassName?: string
   showMarkerPopup?: boolean
+}
+
+type BrandStyle = {
+  short: string
+  background: string
+  text: string
+}
+
+const BRAND_STYLES: Record<string, BrandStyle> = {
+  shell: { short: 'SHL', background: '#FFD500', text: '#111111' },
+  petron: { short: 'PTR', background: '#004B93', text: '#ffffff' },
+  caltex: { short: 'CAL', background: '#E31937', text: '#ffffff' },
+  phoenix: { short: 'PHX', background: '#FF6600', text: '#ffffff' },
+  seaoil: { short: 'SEA', background: '#00A651', text: '#ffffff' },
+  unioil: { short: 'UNI', background: '#1B3C73', text: '#ffffff' },
+  jetti: { short: 'JET', background: '#C8102E', text: '#ffffff' },
+  flyingv: { short: 'FLV', background: '#8B0000', text: '#ffffff' },
+  cleanfuel: { short: 'CLN', background: '#00B4D8', text: '#ffffff' },
+  total: { short: 'TOT', background: '#FF0000', text: '#ffffff' },
+  ptt: { short: 'PTT', background: '#5B2C6F', text: '#ffffff' },
 }
 
 const DEFAULT_CENTER: [number, number] = [14.5995, 120.9842]
@@ -81,28 +103,61 @@ const buildPriceLines = (prices?: StationPriceMap) => {
 
 const getStationLabel = (station: StationListItem) => {
   const brand = (station.brand ?? station.name ?? '').toLowerCase()
-  if (brand.includes('shell')) return 'SHL'
-  if (brand.includes('caltex')) return 'CAL'
-  if (brand.includes('petron')) return 'PTR'
-  if (brand.includes('seaoil')) return 'SEO'
-  if (brand.includes('phoenix')) return 'PHX'
+  for (const [key, style] of Object.entries(BRAND_STYLES)) {
+    if (brand.includes(key)) return style.short
+  }
   return (station.name ?? 'GAS').slice(0, 3).toUpperCase()
 }
 
 const getMarkerColors = (station: StationListItem) => {
   const brand = (station.brand ?? station.name ?? '').toLowerCase()
-  if (brand.includes('petron')) return { background: '#2563eb', text: '#ffffff' }
-  if (brand.includes('caltex')) return { background: '#ef4444', text: '#ffffff' }
-  if (brand.includes('shell')) return { background: '#f59e0b', text: '#1f2937' }
+  for (const [key, style] of Object.entries(BRAND_STYLES)) {
+    if (brand.includes(key)) return { background: style.background, text: style.text }
+  }
   return { background: '#16a34a', text: '#ffffff' }
+}
+
+const getFovPoints = (lat: number, lng: number, heading: number, radiusMeters = 120, halfAngleDeg = 24) => {
+  const earthRadiusMeters = 6371000
+  const toRad = (value: number) => (value * Math.PI) / 180
+  const toDeg = (value: number) => (value * 180) / Math.PI
+
+  const destinationPoint = (bearingDeg: number) => {
+    const bearing = toRad(bearingDeg)
+    const lat1 = toRad(lat)
+    const lng1 = toRad(lng)
+    const angularDistance = radiusMeters / earthRadiusMeters
+
+    const sinLat1 = Math.sin(lat1)
+    const cosLat1 = Math.cos(lat1)
+    const sinAd = Math.sin(angularDistance)
+    const cosAd = Math.cos(angularDistance)
+
+    const lat2 = Math.asin(sinLat1 * cosAd + cosLat1 * sinAd * Math.cos(bearing))
+    const lng2 = lng1 + Math.atan2(
+      Math.sin(bearing) * sinAd * cosLat1,
+      cosAd - sinLat1 * Math.sin(lat2),
+    )
+
+    return [toDeg(lat2), toDeg(lng2)] as [number, number]
+  }
+
+  const points: [number, number][] = [[lat, lng]]
+  for (let angle = heading - halfAngleDeg; angle <= heading + halfAngleDeg; angle += 6) {
+    points.push(destinationPoint(angle))
+  }
+  points.push([lat, lng])
+  return points
 }
 
 export function StationMap({
   stations,
   userLat,
   userLng,
+  userHeading,
   showUserMarker = true,
   centerOnUser = false,
+  highlightStationId,
   onStationSelect,
   containerClassName,
   mapClassName,
@@ -113,6 +168,7 @@ export function StationMap({
   const markerLayerRef = useRef<MarkerClusterGroup | Leaflet.LayerGroup | null>(null)
   const userLayerRef = useRef<Leaflet.Marker | null>(null)
   const userAccuracyLayerRef = useRef<Leaflet.Circle | null>(null)
+  const userFovLayerRef = useRef<Leaflet.Polygon | null>(null)
   const leafletRef = useRef<typeof Leaflet | null>(null)
   const [mapReady, setMapReady] = useState(false)
 
@@ -162,6 +218,7 @@ export function StationMap({
       markerLayerRef.current = null
       userLayerRef.current = null
       userAccuracyLayerRef.current = null
+      userFovLayerRef.current = null
       setMapReady(false)
     }
   }, [center])
@@ -179,6 +236,11 @@ export function StationMap({
     if (userAccuracyLayerRef.current) {
       map.removeLayer(userAccuracyLayerRef.current)
       userAccuracyLayerRef.current = null
+    }
+
+    if (userFovLayerRef.current) {
+      map.removeLayer(userFovLayerRef.current)
+      userFovLayerRef.current = null
     }
 
     if (hasUserLocation && showUserMarker) {
@@ -200,6 +262,15 @@ export function StationMap({
         fillColor: '#2563eb',
         fillOpacity: 0.08,
       }).addTo(map)
+
+      if (typeof userHeading === 'number' && Number.isFinite(userHeading)) {
+        userFovLayerRef.current = L.polygon(getFovPoints(userLat, userLng, userHeading), {
+          color: '#2563eb',
+          weight: 1,
+          fillColor: '#2563eb',
+          fillOpacity: 0.12,
+        }).addTo(map)
+      }
 
       if (centerOnUser) {
         map.setView([userLat, userLng], Math.max(map.getZoom(), 15))
@@ -234,8 +305,9 @@ export function StationMap({
     stations.forEach((station) => {
       const label = escapeHtml(getStationLabel(station))
       const colors = getMarkerColors(station)
+      const isHighlighted = highlightStationId != null && station.id === highlightStationId
       const stationIcon = L.divIcon({
-        html: `<div style="background:${colors.background};color:${colors.text};border-radius:999px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3)">${label}</div>`,
+        html: `<div style="background:${colors.background};color:${colors.text};border-radius:999px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.3);${isHighlighted ? 'border:3px solid #f59e0b;transform:scale(1.08);' : ''}">${label}</div>`,
         className: '',
         iconSize: [34, 34],
         iconAnchor: [17, 34],
@@ -270,7 +342,7 @@ export function StationMap({
     } else if (!centerOnUser) {
       map.setView(center, 13)
     }
-  }, [center, centerOnUser, hasUserLocation, onStationSelect, showMarkerPopup, showUserMarker, stations, userLat, userLng])
+  }, [center, centerOnUser, hasUserLocation, highlightStationId, onStationSelect, showMarkerPopup, showUserMarker, stations, userHeading, userLat, userLng])
 
   return (
     <div className={containerClasses}>
