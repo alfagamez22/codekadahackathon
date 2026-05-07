@@ -1,6 +1,6 @@
 # GasTrackPH
 
-**Live site:** [https://your-url-here]()
+**Live site:** [https://golteb5.vercel.app/login]()
 
 A community-powered fuel price tracking app for the Philippines — focused on Metro Manila and CALABARZON. Users find nearby gas stations on an interactive map, submit real-time fuel prices, and confirm each other's reports before they go live. A built-in route planner answers the key question: _"Is it actually worth driving to that cheaper station?"_
 
@@ -8,34 +8,34 @@ A community-powered fuel price tracking app for the Philippines — focused on M
 
 ## What it does
 
-| Feature | Description |
-|---|---|
-| Interactive map | Locate gas stations by GPS; Leaflet.js with marker clustering |
-| Crowd-validated prices | Submitted prices require 3 independent confirmations before going live |
-| Route planner | Calculates whether a detour to a cheaper station actually saves money given your vehicle's fuel consumption |
-| AI station recommendation | Context-aware station suggestions |
-| Role-based dashboards | Separate views for users, moderators, and admins |
-| Push notifications | FCM price alerts |
-| PWA | Installable on mobile, offline-capable |
-| Automated price seeding | Scheduled Cloud Function scrapes GasWatchPH as a live baseline |
+| Feature                   | Description                                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Interactive map           | Locate gas stations by GPS; Leaflet.js with marker clustering                                               |
+| Crowd-validated prices    | Submitted prices require 3 independent confirmations before going live                                      |
+| Route planner             | Calculates whether a detour to a cheaper station actually saves money given your vehicle's fuel consumption |
+| AI station recommendation | Context-aware station suggestions                                                                           |
+| Role-based dashboards     | Separate views for users, moderators, and admins                                                            |
+| Push notifications        | FCM price alerts                                                                                            |
+| PWA                       | Installable on mobile, offline-capable                                                                      |
+| Automated price seeding   | Scheduled Cloud Function scrapes GasWatchPH as a live baseline                                              |
 
 ---
 
 ## Tech Stack
 
-| Concern | Technology |
-|---|---|
-| Framework | Next.js 16.2.4 — App Router |
-| UI | React 19.2.4, Tailwind CSS v4 |
-| Language | TypeScript 5 (strict) |
-| Database | Firestore (Firestore-only — no SQL) |
-| Auth | Firebase Auth (Google OAuth) + server-side session cookies |
-| Validation | Zod v4 |
-| Client data | TanStack Query v5 |
-| Mapping | Leaflet.js + leaflet.markercluster |
-| Routing API | Geoapify |
-| Background jobs | Firebase Cloud Functions v5 (Node 20) |
-| Push notifications | Firebase Cloud Messaging |
+| Concern            | Technology                                                 |
+| ------------------ | ---------------------------------------------------------- |
+| Framework          | Next.js 16.2.4 — App Router                                |
+| UI                 | React 19.2.4, Tailwind CSS v4                              |
+| Language           | TypeScript 5 (strict)                                      |
+| Database           | Firestore (Firestore-only — no SQL)                        |
+| Auth               | Firebase Auth (Google OAuth) + server-side session cookies |
+| Validation         | Zod v4                                                     |
+| Client data        | TanStack Query v5                                          |
+| Mapping            | Leaflet.js + leaflet.markercluster                         |
+| Routing API        | Geoapify                                                   |
+| Background jobs    | Firebase Cloud Functions v5 (Node 20)                      |
+| Push notifications | Firebase Cloud Messaging                                   |
 
 ---
 
@@ -81,4 +81,3 @@ lib/
 functions/               # Firebase Cloud Functions — price scraping + Firestore triggers
 types/                   # Shared TypeScript types
 ```
-
