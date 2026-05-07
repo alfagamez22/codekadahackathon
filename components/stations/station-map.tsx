@@ -14,13 +14,23 @@ interface StationMapProps {
   stations: StationMapItem[]
   userLat?: number
   userLng?: number
+  showUserMarker?: boolean
   onStationSelect?: (id: string) => void
   containerClassName?: string
   mapClassName?: string
   showMarkerPopup?: boolean
 }
 
-export function StationMap({ stations, userLat, userLng, onStationSelect, containerClassName, mapClassName, showMarkerPopup = true }: StationMapProps) {
+export function StationMap({
+  stations,
+  userLat,
+  userLng,
+  showUserMarker = true,
+  onStationSelect,
+  containerClassName,
+  mapClassName,
+  showMarkerPopup = true,
+}: StationMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [mapReady, setMapReady] = useState(false)
   const [hasMapData, setHasMapData] = useState(true)
@@ -103,16 +113,29 @@ export function StationMap({ stations, userLat, userLng, onStationSelect, contai
   }
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return
+    if (!mapRef.current) return
+
+    if (mapInstanceRef.current) {
+      ;(mapInstanceRef.current as { remove?: () => void }).remove?.()
+      mapInstanceRef.current = null
+    }
+
+    setMapReady(false)
+    setHasMapData(true)
+
+    let cancelled = false
 
     async function initMap() {
       const L = (await import('leaflet')).default
       await import('leaflet/dist/leaflet.css')
-  await import('leaflet.markercluster')
+      await import('leaflet.markercluster')
       await import('leaflet.markercluster/dist/MarkerCluster.css')
       await import('leaflet.markercluster/dist/MarkerCluster.Default.css')
 
+      if (cancelled) return
+
       const hasUserLocation = userLat != null && userLng != null
+      const shouldShowUserMarker = hasUserLocation && showUserMarker
       const firstStation = stations[0]
       if (!hasUserLocation && !firstStation) {
         setHasMapData(false)
@@ -129,7 +152,7 @@ export function StationMap({ stations, userLat, userLng, onStationSelect, contai
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map)
 
-      if (hasUserLocation) {
+      if (shouldShowUserMarker) {
         L.circleMarker([userLat!, userLng!], {
           radius: 8,
           color: '#16a34a',
@@ -193,7 +216,11 @@ export function StationMap({ stations, userLat, userLng, onStationSelect, contai
     }
 
     initMap()
-  }, [stations, userLat, userLng, onStationSelect])
+
+    return () => {
+      cancelled = true
+    }
+  }, [stations, userLat, userLng, onStationSelect, showMarkerPopup, showUserMarker])
 
   return (
     <div className={containerClasses}>
