@@ -13,7 +13,6 @@ type StationMapItem = StationListItem & {
 
 interface StationMapProps {
   stations: StationMapItem[]
-  stations: StationMapItem[]
   userLat?: number
   userLng?: number
   onStationSelect?: (id: string) => void
@@ -157,6 +156,7 @@ export function StationMap({
       leafletRef.current = null
       markerLayerRef.current = null
       userLayerRef.current = null
+      setMapReady(false)
     }
   }, [center])
 
@@ -248,16 +248,9 @@ export function StationMap({
   return (
     <div className={containerClasses}>
       <div ref={mapRef} className={mapClasses} />
-    <div className={containerClasses}>
-      <div ref={mapRef} className={mapClasses} />
       {!mapReady && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-muted text-sm">
           Loading map...
-        </div>
-      )}
-      {mapReady && !hasMapData && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-muted text-sm">
-          No stations to display.
         </div>
       )}
       {mapReady && !hasMapData && (
