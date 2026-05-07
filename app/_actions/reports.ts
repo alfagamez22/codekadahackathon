@@ -111,7 +111,7 @@ export async function submitPriceReportAction(input: PriceReportInput) {
   });
 
   await incrementUserReportCount(session.uid);
-  void incrementReportCount();
+  incrementReportCount().catch((err) => console.error('[stats] Failed to increment report count:', err));
   updateTag("reports");
 
   return { success: true, reportId: docRef.id };
@@ -213,7 +213,7 @@ export async function submitExternalPriceReportAction(input: ExternalPriceReport
   })
 
   await incrementUserReportCount(session.uid)
-  void incrementReportCount()
+  incrementReportCount().catch((err) => console.error('[stats] Failed to increment report count:', err))
   updateTag('reports')
 
   return { success: true, reportId: docRef.id }

@@ -18,7 +18,6 @@ import { UserManagementTable } from '@/components/admin/user-management-table'
 import { StationEditor } from '@/components/admin/station-editor'
 import { SystemConfigForm } from '@/components/admin/system-config-form'
 import { PriceAutoRefresher } from '@/components/dashboard/price-auto-refresher'
-import { Separator } from '@/components/ui/separator'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import type { SessionUser } from '@/types/auth'
@@ -316,17 +315,17 @@ const BRAND_LABELS: Record<string, string> = {
 function NationalAveragePrices({ priceWeek, phTimestamp }: { priceWeek: GaswatchPriceWeek | null; phTimestamp: string }) {
   if (!priceWeek) {
     return (
-      <Card>
-        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
             <CardTitle>National Average Prices</CardTitle>
             <p className="mt-0.5 text-xs text-muted">{phTimestamp}</p>
           </div>
-        </CardHeader>
-        <div className="rounded-lg border border-border bg-gray-50 p-4 text-sm text-muted">
+        </div>
+        <div className="px-5 py-5 text-sm text-muted-foreground">
           No national average prices are available yet.
         </div>
-      </Card>
+      </div>
     )
   }
 
@@ -511,12 +510,14 @@ function AdminPanelContent({
 
   if (activePanel === 'stations') {
     return (
-      <Card padding="lg">
-        <CardHeader>
-          <CardTitle>Station Management</CardTitle>
-        </CardHeader>
-        <StationEditor stations={stations} stationSubmissions={stationSubmissions} />
-      </Card>
+      <div className={wrapperClass}>
+        <div className={headerClass}>
+          <h3 className={titleClass}>Station Management</h3>
+        </div>
+        <div className={bodyClass}>
+          <StationEditor stations={stations} stationSubmissions={stationSubmissions} />
+        </div>
+      </div>
     )
   }
 
